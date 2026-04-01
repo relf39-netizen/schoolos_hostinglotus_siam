@@ -15,6 +15,9 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// BigInt serialization support for JSON
+(BigInt.prototype as any).toJSON = function() { return this.toString() };
+
 // Custom error handler for JSON parsing and payload size errors
 app.use((err: any, req: any, res: any, next: any) => {
   if (err instanceof SyntaxError && 'body' in err) {

@@ -21,6 +21,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+// BigInt serialization support for JSON
+BigInt.prototype.toJSON = function() { return this.toString() };
+
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
   try {
