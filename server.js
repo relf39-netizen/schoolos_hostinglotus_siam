@@ -342,7 +342,29 @@ app.patch('/api/bulk/:table', async (req, res) => {
 app.delete('/api/:table/:id', async (req, res) => {
   try {
     const { table, id } = req.params;
-    await pool.query(`DELETE FROM ?? WHERE id = ?`, [table, id]);
+    const pkMap = {
+      school_configs: 'school_id',
+      schools: 'id',
+      profiles: 'id'
+    };
+    const pk = pkMap[table] || 'id';
+    await pool.query(`DELETE FROM ?? WHERE ?? = ?`, [table, pk, id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/:table/:id/delete', async (req, res) => {
+  try {
+    const { table, id } = req.params;
+    const pkMap = {
+      school_configs: 'school_id',
+      schools: 'id',
+      profiles: 'id'
+    };
+    const pk = pkMap[table] || 'id';
+    await pool.query(`DELETE FROM ?? WHERE ?? = ?`, [table, pk, id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

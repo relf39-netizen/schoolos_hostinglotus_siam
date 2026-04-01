@@ -225,7 +225,18 @@ export const supabase: any = {
                   
                   const contentType = response.headers.get("content-type");
                   if (!contentType || !contentType.includes("application/json")) {
-                    resolve({ data: null, error: { message: "Server returned non-JSON response." } });
+                    // Fallback to POST delete if DELETE fails (WAF/Size)
+                    console.warn(`Delete JSON failed for ${table}, retrying with POST...`);
+                    const fallbackResponse = await fetch(`${API_URL}/${table}/${value}/delete`, {
+                      method: 'POST'
+                    });
+                    const fallbackText = await fallbackResponse.text();
+                    try {
+                      const fallbackResult = JSON.parse(fallbackText);
+                      resolve(fallbackResponse.ok ? { data: true, error: null } : { data: null, error: { message: fallbackResult.error } });
+                    } catch (e) {
+                      resolve({ data: null, error: { message: "Server returned non-JSON response during delete fallback." } });
+                    }
                     return;
                   }
 

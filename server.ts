@@ -494,6 +494,24 @@ app.delete('/api/:table/:id', async (req, res) => {
   }
 });
 
+app.post('/api/:table/:id/delete', async (req, res) => {
+  try {
+    const { table, id } = req.params;
+    const pkMap: any = {
+      school_configs: 'school_id',
+      schools: 'id',
+      profiles: 'id'
+    };
+    const pk = pkMap[table] || 'id';
+
+    await pool.query(`DELETE FROM ?? WHERE ?? = ?`, [table, pk, id]);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Catch-all for undefined API routes to prevent HTML response
 app.all('/api/*all', (req, res) => {
   res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
