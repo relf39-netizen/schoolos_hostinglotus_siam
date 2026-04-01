@@ -102,17 +102,39 @@ const DirectorCalendar: React.FC<DirectorCalendarProps> = ({ currentUser, allTea
                 try {
                     const { data } = await supabase.from('director_events').select('*').eq('school_id', currentUser.schoolId);
                     if (data) {
-                        setEvents(data.map((e: any) => ({
-                            id: e.id,
-                            title: e.title,
-                            date: e.date,
-                            startTime: e.start_time,
-                            endTime: e.end_time,
-                            location: e.location,
-                            description: e.description,
-                            notifiedOneDayBefore: e.notified_one_day_before,
-                            notifiedOnDay: e.notified_on_day
-                        })));
+                        setEvents(data.map((e: any) => {
+                            // Handle both 'date' and 'start_date' columns
+                            let eventDate = e.date;
+                            let startTime = e.start_time;
+                            let endTime = e.end_time;
+
+                            if (!eventDate && e.start_date) {
+                                const d = new Date(e.start_date);
+                                if (!isNaN(d.getTime())) {
+                                    eventDate = formatDateLocal(d);
+                                    startTime = startTime || `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                                }
+                            }
+
+                            // Ensure date is a string in YYYY-MM-DD format
+                            if (eventDate instanceof Date) {
+                                eventDate = formatDateLocal(eventDate);
+                            } else if (typeof eventDate === 'string' && eventDate.includes('T')) {
+                                eventDate = formatDateLocal(new Date(eventDate));
+                            }
+
+                            return {
+                                id: e.id.toString(),
+                                title: e.title,
+                                date: eventDate || formatDateLocal(new Date()),
+                                startTime: startTime || '09:00',
+                                endTime: endTime || '',
+                                location: e.location,
+                                description: e.description,
+                                notifiedOneDayBefore: e.notified_one_day_before,
+                                notifiedOnDay: e.notified_on_day
+                            };
+                        }));
                     }
                 } catch (e) {
                     console.error("Error loading director events:", e);

@@ -88,15 +88,24 @@ const AcademicSystem: React.FC<AcademicSystemProps> = ({ currentUser }) => {
                 setTestScores(mappedScores);
 
                 const { data: calData } = await supabase.from('academic_calendar').select('*').eq('school_id', currentUser.schoolId).order('start_date', { ascending: true });
-                const mappedCal: AcademicCalendarEvent[] = calData ? calData.map((d: any) => ({ 
-                    id: d.id.toString(), 
-                    schoolId: d.school_id, 
-                    year: d.year ? d.year.toString().trim() : '', 
-                    title: d.title, 
-                    startDate: d.start_date, 
-                    endDate: d.end_date || d.start_date, 
-                    description: d.description 
-                })) : [];
+                const mappedCal: AcademicCalendarEvent[] = calData ? calData.map((d: any) => {
+                    let year = d.year ? d.year.toString().trim() : '';
+                    if (!year && d.start_date) {
+                        const date = new Date(d.start_date);
+                        if (!isNaN(date.getTime())) {
+                            year = (date.getFullYear() + 543).toString();
+                        }
+                    }
+                    return { 
+                        id: d.id.toString(), 
+                        schoolId: d.school_id, 
+                        year: year, 
+                        title: d.title, 
+                        startDate: d.start_date, 
+                        endDate: d.end_date || d.start_date, 
+                        description: d.description 
+                    };
+                }) : [];
                 setCalendarEvents(mappedCal);
 
                 const { data: sarData } = await supabase.from('academic_sar').select('*').eq('school_id', currentUser.schoolId).order('year', { ascending: false });
