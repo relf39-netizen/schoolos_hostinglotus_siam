@@ -254,7 +254,7 @@ export const supabase: any = {
         const execute = async () => {
           try {
             const items = Array.isArray(data) ? data : [data];
-            // ส่งทีละ 1 รายการเพื่อความปลอดภัยสูงสุดและไม่ให้ Request ใหญ่เกินไป
+            // ส่งทีละ 1 รายการเพื่อความปลอดภัยสูงสุด
             const chunkSize = 1; 
             
             const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -262,51 +262,64 @@ export const supabase: any = {
             for (let i = 0; i < items.length; i += chunkSize) {
               const chunk = items.slice(i, i + chunkSize);
               
-              // เพิ่มการรอ 1 วินาที (1000ms) เพื่อไม่ให้ Request ถี่เกินไป
-              if (i > 0) await delay(1000);
+              // เพิ่มการรอระหว่างรายการ (เพิ่มเป็น 1.5 วินาทีเพื่อความชัวร์)
+              if (i > 0) await delay(1500);
 
-              // ลองส่งแบบ JSON ปกติก่อน (ประหยัด Bandwidth และลดโอกาสติด Firewall ของบางที่)
-              // หากติด Firewall จริงๆ ค่อยใช้ Base64 (แต่ Base64 จะทำให้ Request ใหญ่ขึ้น 33%)
-              try {
-                const response = await fetch(`${API_URL}/v1/transfer/${table}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(chunk)
-                });
+              let success = false;
+              let attempts = 0;
+              const maxAttempts = 3;
 
-                const text = await response.text();
-                let result;
+              while (!success && attempts < maxAttempts) {
+                attempts++;
                 try {
-                  result = JSON.parse(text);
-                  if (!response.ok) {
-                    return { data: null, error: { message: result.error || "เกิดข้อผิดพลาดระหว่างนำเข้าข้อมูล" } };
-                  }
-                } catch (e) {
-                  // ถ้าส่ง JSON ปกติแล้วได้ HTML (อาจติด WAF) ให้ลองส่งแบบ Base64
-                  console.warn(`JSON request failed for ${table}, retrying with Base64...`);
-                  
-                  const jsonString = JSON.stringify(chunk);
-                  const encodedData = b64EncodeUnicode(jsonString);
-
-                  const b64Response = await fetch(`${API_URL}/v1/transfer/${table}`, {
+                  // ลองส่งแบบ JSON ปกติก่อน
+                  const response = await fetch(`${API_URL}/v1/transfer/${table}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ encodedData })
+                    body: JSON.stringify(chunk)
                   });
 
-                  const b64Text = await b64Response.text();
+                  const text = await response.text();
                   try {
-                    const b64Result = JSON.parse(b64Text);
-                    if (!b64Response.ok) {
-                      return { data: null, error: { message: b64Result.error || "เกิดข้อผิดพลาดระหว่างนำเข้าข้อมูล (Base64)" } };
+                    const result = JSON.parse(text);
+                    if (response.ok) {
+                      success = true;
+                    } else {
+                      throw new Error(result.error || "Server rejected JSON");
                     }
-                  } catch (b64E) {
-                    console.error(`Invalid API response (not JSON) for ${table}/transfer (Base64):`, b64Text.substring(0, 500));
-                    return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (อาจเพราะข้อมูลมีขนาดใหญ่เกินไป หรือติด Firewall ขั้นรุนแรง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+                  } catch (e) {
+                    // ถ้าได้ HTML หรือ JSON Error ให้ลอง Base64
+                    console.warn(`Attempt ${attempts}: JSON failed for ${table}, retrying with Base64...`);
+                    
+                    const jsonString = JSON.stringify(chunk);
+                    const encodedData = b64EncodeUnicode(jsonString);
+
+                    const b64Response = await fetch(`${API_URL}/v1/transfer/${table}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ encodedData })
+                    });
+
+                    const b64Text = await b64Response.text();
+                    try {
+                      const b64Result = JSON.parse(b64Text);
+                      if (b64Response.ok) {
+                        success = true;
+                      } else {
+                        if (attempts >= maxAttempts) return { data: null, error: { message: b64Result.error || "Firewall blocked Base64 request" } };
+                        await delay(2000 * attempts); // รอเพิ่มขึ้นก่อนลองใหม่
+                      }
+                    } catch (b64E) {
+                      if (attempts >= maxAttempts) {
+                        return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (อาจเพราะข้อมูลมีขนาดใหญ่เกินไป หรือติด Firewall ขั้นรุนแรง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+                      }
+                      await delay(2000 * attempts);
+                    }
                   }
+                } catch (fetchError: any) {
+                  if (attempts >= maxAttempts) return { data: null, error: { message: `ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้: ${fetchError.message}` } };
+                  await delay(2000 * attempts);
                 }
-              } catch (fetchError: any) {
-                return { data: null, error: { message: `ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้: ${fetchError.message}` } };
               }
             }
             
