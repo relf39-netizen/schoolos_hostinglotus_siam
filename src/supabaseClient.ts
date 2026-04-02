@@ -152,7 +152,7 @@ export const supabase: any = {
               const jsonString = JSON.stringify(data);
               const encodedData = b64EncodeUnicode(jsonString);
 
-              const b64Response = await fetch(`${API_URL}/v1/transfer/${table}`, {
+              const b64Response = await fetch(`${API_URL}/v1/sync-base64/${table}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ encodedData })
@@ -163,7 +163,7 @@ export const supabase: any = {
                 const b64Result = JSON.parse(b64Text);
                 return b64Response.ok ? { data: b64Result.data, error: null } : { data: null, error: { message: b64Result.error } };
               } catch (b64E) {
-                return { data: null, error: { message: `Server returned non-JSON response during Base64 fallback. \n\nSnippet: ${b64Text.substring(0, 200)}...` } };
+                return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
               }
             }
           } catch (error: any) {
@@ -192,13 +192,13 @@ export const supabase: any = {
                   }
                   return { data: result.data, error: null };
                 } catch (e) {
-                  // Fallback to transfer endpoint for updates if PATCH fails (WAF/Size)
-                  console.warn(`Update JSON failed for ${table}, retrying with Base64 Transfer...`);
+                  // Fallback to sync endpoint for updates if PATCH fails (WAF/Size)
+                  console.warn(`Update JSON failed for ${table}, retrying with Base64 Sync...`);
                   const payload = { ...data, [column]: value }; // Ensure ID is included for upsert-like behavior
                   const jsonString = JSON.stringify([payload]);
                   const encodedData = b64EncodeUnicode(jsonString);
 
-                  const b64Response = await fetch(`${API_URL}/v1/transfer/${table}`, {
+                  const b64Response = await fetch(`${API_URL}/v1/sync-base64/${table}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ encodedData })
@@ -209,7 +209,7 @@ export const supabase: any = {
                     const b64Result = JSON.parse(b64Text);
                     return b64Response.ok ? { data: b64Result.data, error: null } : { data: null, error: { message: b64Result.error } };
                   } catch (b64E) {
-                    return { data: null, error: { message: "Server returned non-JSON response during Base64 update fallback." } };
+                    return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
                   }
                 }
               } catch (error: any) {
@@ -262,26 +262,23 @@ export const supabase: any = {
         const execute = async () => {
           try {
             const items = Array.isArray(data) ? data : [data];
-            // ส่งทีละ 1 รายการเพื่อความปลอดภัยสูงสุด
-            const chunkSize = 1; 
-            
+            const chunkSize = 5; 
             const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+            const allResults = [];
             for (let i = 0; i < items.length; i += chunkSize) {
               const chunk = items.slice(i, i + chunkSize);
-              
-              // เพิ่มการรอระหว่างรายการ
-              if (i > 0) await delay(1000);
+              if (i > 0) await delay(500);
 
               let success = false;
               let attempts = 0;
-              const maxAttempts = 3;
+              const maxAttempts = 2;
 
               while (!success && attempts < maxAttempts) {
                 attempts++;
                 try {
-                  // ลองส่งแบบ JSON ปกติก่อน
-                  const response = await fetch(`${API_URL}/v1/db-sync/${table}`, {
+                  // Use the standard POST endpoint which now handles upserts
+                  const response = await fetch(`${API_URL}/${table}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(chunk)
@@ -291,18 +288,18 @@ export const supabase: any = {
                   try {
                     const result = JSON.parse(text);
                     if (response.ok) {
+                      const resultData = result.data;
+                      allResults.push(...(Array.isArray(resultData) ? resultData : [resultData]));
                       success = true;
                     } else {
                       throw new Error(result.error || "Server rejected JSON");
                     }
                   } catch (e) {
-                    // ถ้าได้ HTML หรือ JSON Error ให้ลอง Base64
-                    console.warn(`Attempt ${attempts}: JSON failed for ${table}, retrying with Base64...`);
-                    
+                    console.warn(`Upsert JSON failed for ${table}, retrying with Base64...`);
                     const jsonString = JSON.stringify(chunk);
                     const encodedData = b64EncodeUnicode(jsonString);
 
-                    const b64Response = await fetch(`${API_URL}/v1/db-sync/${table}`, {
+                    const b64Response = await fetch(`${API_URL}/v1/sync-base64/${table}`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ encodedData })
@@ -312,26 +309,27 @@ export const supabase: any = {
                     try {
                       const b64Result = JSON.parse(b64Text);
                       if (b64Response.ok) {
+                        const b64ResultData = b64Result.data;
+                        allResults.push(...(Array.isArray(b64ResultData) ? b64ResultData : [b64ResultData]));
                         success = true;
                       } else {
                         if (attempts >= maxAttempts) return { data: null, error: { message: b64Result.error || "Firewall blocked Base64 request" } };
-                        await delay(1000 * attempts);
+                        await delay(500 * attempts);
                       }
                     } catch (b64E) {
                       if (attempts >= maxAttempts) {
                         return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
                       }
-                      await delay(1000 * attempts);
+                      await delay(500 * attempts);
                     }
                   }
                 } catch (fetchError: any) {
                   if (attempts >= maxAttempts) return { data: null, error: { message: `ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้: ${fetchError.message}` } };
-                  await delay(1000 * attempts);
+                  await delay(500 * attempts);
                 }
               }
             }
-            
-            return { data: true, error: null };
+            return { data: allResults, error: null };
           } catch (error: any) {
             return { data: null, error: { message: error.message } };
           }

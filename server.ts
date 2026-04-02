@@ -130,75 +130,63 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// DATA SYNC (Special case for migration/upsert) - Using Base64 to bypass strict firewalls
-app.post('/api/v1/db-sync/:table', async (req, res) => {
+// DATA SYNC (Base64 fallback for strict firewalls)
+app.post('/api/v1/sync-base64/:table', async (req, res) => {
   const { table } = req.params;
   try {
-    let items = [];
-    
-    // Check if data is Base64 encoded
-    if (req.body.encodedData) {
-      const decodedString = Buffer.from(req.body.encodedData, 'base64').toString('utf-8');
-      items = JSON.parse(decodedString);
-    } else {
-      items = Array.isArray(req.body) ? req.body : [req.body];
+    if (!req.body.encodedData) {
+      return res.status(400).json({ error: 'Missing encodedData' });
     }
+    const decodedString = Buffer.from(req.body.encodedData, 'base64').toString('utf-8');
+    const items = JSON.parse(decodedString);
     
-    if (items.length === 0) {
-      return res.json({ success: true, message: 'No items to sync' });
-    }
-
-    console.log(`[API] Syncing ${items.length} items into ${table}`);
-    
-    const uuidTables = ['class_rooms', 'students', 'student_savings', 'academic_years', 'student_attendance', 'student_health_records', 'director_events', 'finance_accounts', 'finance_transactions'];
-
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
-      
-      for (const item of items) {
-        const processedData = { ...item };
-        
-        // Generate UUID if missing for certain tables
-        if (uuidTables.includes(table) && !processedData.id) {
-          processedData.id = uuidv4();
-        }
-
-        const keys = Object.keys(processedData);
-        if (keys.length === 0) continue;
-
-        const values = Object.values(processedData).map(v => (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v);
-        
-        const placeholders = keys.map(() => '?').join(', ');
-        // Use a more standard MySQL upsert syntax
-        const updateClause = keys.filter(k => k !== 'id').map(k => `?? = VALUES(??)`).join(', ');
-        const updateParams = keys.filter(k => k !== 'id').flatMap(k => [k, k]);
-
-        let sql = `INSERT INTO ?? (??) VALUES (${placeholders})`;
-        let params = [table, keys, ...values];
-
-        if (updateClause) {
-          sql += ` ON DUPLICATE KEY UPDATE ${updateClause}`;
-          params.push(...updateParams);
-        }
-        
-        await connection.query(sql, params);
-      }
-
-      await connection.commit();
-      return res.status(200).json({ success: true });
-    } catch (err: any) {
-      await connection.rollback();
-      console.error(`[DATABASE ERROR] Sync failed for ${table}: ${err.message}`);
-      return res.status(500).json({ error: `Database error: ${err.message}` });
-    } finally {
-      connection.release();
-    }
+    const results = await performBulkUpsert(table, items);
+    return res.json({ success: true, data: results });
   } catch (error: any) {
-    console.error(`[API ERROR] Sync failed for ${table}:`, error);
-    return res.status(500).json({ error: `Internal server error: ${error.message}` });
+    console.error(`[API ERROR] Base64 Sync failed for ${table}:`, error);
+    return res.status(500).json({ error: error.message });
   }
 });
+
+async function performBulkUpsert(table: string, items: any[]) {
+  const uuidTables = ['class_rooms', 'students', 'student_savings', 'academic_years', 'student_attendance', 'student_health_records', 'director_events', 'finance_accounts', 'finance_transactions'];
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const results = [];
+    for (const item of items) {
+      const processedData = { ...item };
+      if (uuidTables.includes(table) && !processedData.id) {
+        processedData.id = uuidv4();
+      }
+
+      const keys = Object.keys(processedData);
+      if (keys.length === 0) continue;
+
+      const values = Object.values(processedData).map(v => (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v);
+      const placeholders = keys.map(() => '?').join(', ');
+      const updateClause = keys.filter(k => k !== 'id').map(k => `?? = VALUES(??)`).join(', ');
+      const updateParams = keys.filter(k => k !== 'id').flatMap(k => [k, k]);
+
+      let sql = `INSERT INTO ?? (??) VALUES (${placeholders})`;
+      let params = [table, keys, ...values];
+      if (updateClause.length > 0) {
+        sql += ` ON DUPLICATE KEY UPDATE ${updateClause}`;
+        params.push(...updateParams);
+      }
+
+      const [result]: any = await connection.query(sql, params);
+      results.push({ id: processedData.id || result.insertId, ...item });
+    }
+    await connection.commit();
+    return results;
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
 
 // GET health check
 app.get('/api/health', async (req, res) => {
@@ -457,39 +445,10 @@ app.post('/api/:table', async (req, res) => {
     const { table } = req.params;
     const items = Array.isArray(req.body) ? req.body : [req.body];
     
-    const jsonFieldsMap: any = {
-      profiles: ['roles', 'assigned_classes'],
-      school_configs: ['internal_departments', 'external_agencies'],
-      academic_enrollments: ['levels'],
-      academic_test_scores: ['results'],
-      documents: ['target_teachers', 'acknowledged_by', 'attachments'],
-      attendance: ['coordinate']
-    };
-    const fieldsToSerialize = jsonFieldsMap[table] || [];
-
-    const results = [];
-    for (const item of items) {
-      const processedData = { ...item };
-      
-      // Generate UUID if missing for certain tables
-      const uuidTables = ['class_rooms', 'students', 'student_savings', 'academic_years', 'student_attendance', 'student_health_records', 'director_events', 'finance_accounts', 'finance_transactions'];
-      if (uuidTables.includes(table) && !processedData.id) {
-        processedData.id = uuidv4();
-      }
-
-      fieldsToSerialize.forEach((field: string) => {
-        if (processedData[field] && typeof processedData[field] !== 'string') {
-          processedData[field] = JSON.stringify(processedData[field]);
-        }
-      });
-
-      const [result]: any = await pool.query(`INSERT INTO ?? SET ?`, [table, processedData]);
-      results.push({ id: result.insertId || processedData.id, ...item });
-    }
-    
+    const results = await performBulkUpsert(table, items);
     res.json({ data: Array.isArray(req.body) ? results : results[0] });
   } catch (error: any) {
-    console.error(error);
+    console.error(`[API ERROR] POST failed for ${table}:`, error);
     res.status(500).json({ error: error.message });
   }
 });
