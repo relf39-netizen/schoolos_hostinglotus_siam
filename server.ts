@@ -350,6 +350,40 @@ app.post('/api/maintenance/fix-schema', async (req, res) => {
           start_date DATETIME,
           end_date DATETIME,
           location TEXT,
+          created_by VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Fix student_savings table (Transactions as used in frontend)
+      await connection.query("DROP TABLE IF EXISTS student_savings");
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS student_savings (
+          id VARCHAR(36) PRIMARY KEY,
+          student_id VARCHAR(36),
+          school_id VARCHAR(50),
+          amount DECIMAL(15,2),
+          type VARCHAR(20),
+          academic_year VARCHAR(20),
+          created_by VARCHAR(100),
+          created_at DATETIME,
+          edited_at DATETIME,
+          edited_by VARCHAR(100),
+          edit_reason TEXT
+        )
+      `);
+
+      // Fix savings_transactions table (Optional, keeping for compatibility)
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS savings_transactions (
+          id VARCHAR(36) PRIMARY KEY,
+          school_id VARCHAR(50),
+          student_id VARCHAR(36),
+          type VARCHAR(20) NOT NULL,
+          amount DECIMAL(15,2) NOT NULL,
+          balance_after DECIMAL(15,2) NOT NULL,
+          description TEXT,
+          created_by VARCHAR(100),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);
@@ -385,18 +419,19 @@ app.post('/api/maintenance/fix-schema', async (req, res) => {
         )
       `);
 
-      // Fix student_attendance table
+      // Fix student_attendance table (Drop and recreate to fix incorrect columns from previous version)
+      await connection.query("DROP TABLE IF EXISTS student_attendance");
       await connection.query(`
         CREATE TABLE IF NOT EXISTS student_attendance (
           id VARCHAR(36) PRIMARY KEY,
+          school_id VARCHAR(50),
           student_id VARCHAR(36),
-          school_id VARCHAR(36),
-          class_name VARCHAR(50),
-          status VARCHAR(20),
-          recorded_at DATE,
-          academic_year VARCHAR(20),
-          recorded_by VARCHAR(36),
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          date DATE NOT NULL,
+          status VARCHAR(50) NOT NULL,
+          academic_year VARCHAR(50) NOT NULL,
+          created_by VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(student_id, date)
         )
       `);
 

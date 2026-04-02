@@ -600,7 +600,7 @@ const StudentSavingsSystem: React.FC<StudentSavingsSystemProps> = ({ currentUser
                     type: transactionType,
                     academic_year: currentAcademicYear,
                     created_by: currentUser.id,
-                    created_at: selectedDate.toISOString()
+                    created_at: selectedDate.toISOString().slice(0, 19).replace('T', ' ')
                 }])
                 .select();
 
@@ -647,7 +647,7 @@ const StudentSavingsSystem: React.FC<StudentSavingsSystemProps> = ({ currentUser
                 .update({
                     amount: parseFloat(amount),
                     edit_reason: editReason,
-                    edited_at: new Date().toISOString(),
+                    edited_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
                     edited_by: currentUser.id
                 })
                 .eq('id', editingTransaction.id)
