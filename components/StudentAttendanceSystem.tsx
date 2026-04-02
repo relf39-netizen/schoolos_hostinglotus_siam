@@ -580,12 +580,16 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
                 return;
             }
 
-            // Use upsert to handle updates
-            const { error } = await supabase
-                .from('student_attendance')
-                .upsert(records, { onConflict: 'student_id, date' });
+            // Send in chunks to avoid payload size issues
+            const chunkSize = 10;
+            for (let i = 0; i < records.length; i += chunkSize) {
+                const chunk = records.slice(i, i + chunkSize);
+                const { error } = await supabase
+                    .from('student_attendance')
+                    .upsert(chunk, { onConflict: 'student_id, date' });
 
-            if (error) throw error;
+                if (error) throw error;
+            }
             
             alert('บันทึกข้อมูลการมาเรียนเรียบร้อยแล้ว');
             await fetchAttendance(selectedDate);
