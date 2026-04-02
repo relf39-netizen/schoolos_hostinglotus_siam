@@ -43,6 +43,20 @@ interface StudentAttendanceSystemProps {
 
 const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ currentUser }) => {
     const [viewMode, setViewMode] = useState<'DASHBOARD' | 'RECORD' | 'HISTORY' | 'STUDENT_INFO' | 'OVERALL_REPORT' | 'CLASS_REPORT'>('DASHBOARD');
+    const [showConfirmModal, setShowConfirmModal] = useState<{
+        show: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({ show: false, title: '', message: '', onConfirm: () => {} });
+    
+    const [showAlertModal, setShowAlertModal] = useState<{
+        show: boolean;
+        title: string;
+        message: string;
+        type: 'success' | 'error' | 'warning';
+    }>({ show: false, title: '', message: '', type: 'success' });
+
     const [students, setStudents] = useState<Student[]>([]);
     const [attendance, setAttendance] = useState<StudentAttendance[]>([]);
     const [historyAttendance, setHistoryAttendance] = useState<StudentAttendance[]>([]);
@@ -171,7 +185,12 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
 
     const handlePhotoUpload = async (file: File) => {
         if (!schoolConfig?.script_url || !schoolConfig?.drive_folder_id) {
-            alert("กรุณาให้ผู้ดูแลระบบตั้งค่า Google Drive ในหน้าตั้งค่าก่อน");
+            setShowAlertModal({
+                show: true,
+                title: 'ตั้งค่า Google Drive',
+                message: 'กรุณาให้ผู้ดูแลระบบตั้งค่า Google Drive ในหน้าตั้งค่าก่อน',
+                type: 'warning'
+            });
             return;
         }
 
@@ -213,7 +232,12 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
                 throw new Error(result.message || "Upload failed");
             }
         } catch (err: any) {
-            alert("อัปโหลดรูปภาพล้มเหลว: " + err.message);
+            setShowAlertModal({
+                show: true,
+                title: 'อัปโหลดล้มเหลว',
+                message: "อัปโหลดรูปภาพล้มเหลว: " + err.message,
+                type: 'error'
+            });
         } finally {
             setIsUploadingPhoto(false);
         }
@@ -224,7 +248,12 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
             setSelectedStudentForInfo(prev => prev ? { ...prev, location: loc } : null);
         }, (err) => {
-            alert("ไม่สามารถดึงพิกัดได้: " + err.message);
+            setShowAlertModal({
+                show: true,
+                title: 'พิกัดล้มเหลว',
+                message: "ไม่สามารถดึงพิกัดได้: " + err.message,
+                type: 'error'
+            });
         });
     };
 
@@ -275,9 +304,19 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             
             // Update local state
             setStudents(prev => prev.map(s => s.id === selectedStudentForInfo.id ? selectedStudentForInfo : s));
-            alert('บันทึกข้อมูลสำเร็จ');
+            setShowAlertModal({
+                show: true,
+                title: 'สำเร็จ',
+                message: 'บันทึกข้อมูลสำเร็จ',
+                type: 'success'
+            });
         } catch (err: any) {
-            alert('ขัดข้อง: ' + err.message);
+            setShowAlertModal({
+                show: true,
+                title: 'ขัดข้อง',
+                message: 'ขัดข้อง: ' + err.message,
+                type: 'error'
+            });
         } finally {
             setIsSaving(false);
         }
@@ -305,21 +344,45 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             setNewHeight('');
             fetchHealthRecords(selectedStudentForInfo.id);
         } catch (err: any) {
-            alert('ขัดข้อง: ' + err.message);
+            setShowAlertModal({
+                show: true,
+                title: 'ขัดข้อง',
+                message: 'ขัดข้อง: ' + err.message,
+                type: 'error'
+            });
         } finally {
             setIsSavingHealth(false);
         }
     };
 
     const handleDeleteHealthRecord = async (id: string) => {
-        if (!confirm('ยืนยันลบข้อมูลสุขภาพ?') || !supabase) return;
-        try {
-            const { error } = await supabase.from('student_health_records').delete().eq('id', id);
-            if (error) throw error;
-            if (selectedStudentForInfo) fetchHealthRecords(selectedStudentForInfo.id);
-        } catch (err: any) {
-            alert('ขัดข้อง: ' + err.message);
-        }
+        setShowConfirmModal({
+            show: true,
+            title: 'ยืนยันการลบ',
+            message: 'ยืนยันลบข้อมูลสุขภาพ?',
+            onConfirm: async () => {
+                setShowConfirmModal({ ...showConfirmModal, show: false });
+                if (!supabase) return;
+                try {
+                    const { error } = await supabase.from('student_health_records').delete().eq('id', id);
+                    if (error) throw error;
+                    setShowAlertModal({
+                        show: true,
+                        title: 'สำเร็จ',
+                        message: 'ลบข้อมูลสำเร็จ',
+                        type: 'success'
+                    });
+                    if (selectedStudentForInfo) fetchHealthRecords(selectedStudentForInfo.id);
+                } catch (err: any) {
+                    setShowAlertModal({
+                        show: true,
+                        title: 'ขัดข้อง',
+                        message: 'ขัดข้อง: ' + err.message,
+                        type: 'error'
+                    });
+                }
+            }
+        });
     };
 
     const openStudentInfo = (student: Student) => {
@@ -569,7 +632,12 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
         if (!supabase) return;
         
         if (!currentAcademicYear) {
-            alert('ไม่พบข้อมูลปีการศึกษาปัจจุบัน กรุณาตั้งค่าปีการศึกษาในหน้าจัดการข้อมูล (Manage Academic Years) และเลือกปีปัจจุบันก่อน');
+            setShowAlertModal({
+                show: true,
+                title: 'ไม่พบปีการศึกษา',
+                message: 'ไม่พบปีการศึกษาปัจจุบัน กรุณาตั้งค่าปีการศึกษาในหน้าจัดการข้อมูล (Manage Academic Years) และเลือกปีปัจจุบันก่อน',
+                type: 'warning'
+            });
             return;
         }
 
@@ -581,23 +649,41 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
         );
 
         if (existingRecords.length > 0) {
-            const confirmOverwrite = window.confirm(`คุณเคยบันทึกข้อมูลการมาเรียนของชั้น ${selectedClass} ในวันที่ ${formatToThaiDate(selectedDate)} ไปแล้ว \n\nคุณต้องการบันทึกทับข้อมูลเดิมใช่หรือไม่?`);
-            if (!confirmOverwrite) return;
+            setShowConfirmModal({
+                show: true,
+                title: 'ยืนยันการบันทึกทับข้อมูล',
+                message: `คุณเคยบันทึกข้อมูลการมาเรียนของชั้น ${selectedClass} ในวันที่ ${formatToThaiDate(selectedDate)} ไปแล้ว \n\nคุณต้องการบันทึกทับข้อมูลเดิมใช่หรือไม่?`,
+                onConfirm: () => executeSave(existingRecords)
+            });
+        } else {
+            executeSave([]);
         }
+    };
 
+    const executeSave = async (existingRecords: any[]) => {
+        setShowConfirmModal({ ...showConfirmModal, show: false });
         setIsSaving(true);
         try {
-            const records = Object.entries(tempAttendance).map(([studentId, status]) => ({
-                school_id: currentUser.schoolId,
-                student_id: studentId,
-                date: selectedDate,
-                status: status,
-                academic_year: currentAcademicYear,
-                created_by: currentUser.id
-            }));
+            const records = Object.entries(tempAttendance).map(([studentId, status]) => {
+                const existing = existingRecords.find(e => e.student_id.toLowerCase() === studentId.toLowerCase());
+                return {
+                    id: existing ? existing.id : undefined,
+                    school_id: currentUser.schoolId,
+                    student_id: studentId,
+                    date: selectedDate,
+                    status: status,
+                    academic_year: currentAcademicYear,
+                    created_by: currentUser.id
+                };
+            });
 
             if (records.length === 0) {
-                alert('ไม่พบรายชื่อนักเรียนที่จะบันทึก');
+                setShowAlertModal({
+                    show: true,
+                    title: 'ไม่พบข้อมูล',
+                    message: 'ไม่พบรายชื่อนักเรียนที่จะบันทึก',
+                    type: 'warning'
+                });
                 setIsSaving(false);
                 return;
             }
@@ -618,7 +704,12 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
                 }
             }
             
-            alert('บันทึกข้อมูลการมาเรียนเรียบร้อยแล้ว');
+            setShowAlertModal({
+                show: true,
+                title: 'สำเร็จ',
+                message: 'บันทึกข้อมูลการมาเรียนเรียบร้อยแล้ว',
+                type: 'success'
+            });
             await fetchAttendance(selectedDate);
             setViewMode('DASHBOARD');
         } catch (error: any) {
@@ -626,7 +717,12 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             // Provide more detailed error info
             const errorMsg = error.message || error.details || 'Unknown error';
             const errorCode = error.code ? `(Code: ${error.code})` : '';
-            alert(`เกิดข้อผิดพลาดในการบันทึกข้อมูล: ${errorMsg} ${errorCode}`);
+            setShowAlertModal({
+                show: true,
+                title: 'เกิดข้อผิดพลาด',
+                message: `เกิดข้อผิดพลาดในการบันทึกข้อมูล: ${errorMsg} ${errorCode}`,
+                type: 'error'
+            });
         } finally {
             setIsSaving(false);
         }
@@ -647,7 +743,7 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             const classAttendance = attendance.filter(a => {
                 const aDate = typeof a.date === 'string' ? a.date.split('T')[0] : a.date;
                 const sDate = selectedDate.split('T')[0];
-                return aDate === sDate && classStudents.some(s => s.id === a.studentId);
+                return aDate === sDate && classStudents.some(s => s.id.toLowerCase() === a.studentId.toLowerCase());
             });
             
             statsByClass[cls.name] = {
@@ -1737,6 +1833,76 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
 
             {/* Absence Details Modal */}
             <AnimatePresence>
+                {showConfirmModal.show && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden"
+                        >
+                            <div className="p-8">
+                                <div className="flex items-center gap-4 mb-6">
+                                    <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                                        <AlertCircle size={24} />
+                                    </div>
+                                    <h3 className="font-black text-slate-800 text-lg">{showConfirmModal.title}</h3>
+                                </div>
+                                <p className="text-slate-600 font-bold text-sm leading-relaxed mb-8 whitespace-pre-wrap">
+                                    {showConfirmModal.message}
+                                </p>
+                                <div className="flex gap-3">
+                                    <button 
+                                        onClick={() => setShowConfirmModal({ ...showConfirmModal, show: false })}
+                                        className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all"
+                                    >
+                                        ยกเลิก
+                                    </button>
+                                    <button 
+                                        onClick={showConfirmModal.onConfirm}
+                                        className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-black text-sm hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                                    >
+                                        ตกลง
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+
+                {showAlertModal.show && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                        <motion.div 
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden"
+                        >
+                            <div className="p-8">
+                                <div className="flex items-center gap-4 mb-6">
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                                        showAlertModal.type === 'success' ? 'bg-emerald-50 text-emerald-600' :
+                                        showAlertModal.type === 'error' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+                                    }`}>
+                                        {showAlertModal.type === 'success' ? <CheckCircle2 size={24} /> :
+                                         showAlertModal.type === 'error' ? <XCircle size={24} /> : <AlertCircle size={24} />}
+                                    </div>
+                                    <h3 className="font-black text-slate-800 text-lg">{showAlertModal.title}</h3>
+                                </div>
+                                <p className="text-slate-600 font-bold text-sm leading-relaxed mb-8">
+                                    {showAlertModal.message}
+                                </p>
+                                <button 
+                                    onClick={() => setShowAlertModal({ ...showAlertModal, show: false })}
+                                    className="w-full py-3 bg-slate-100 text-slate-600 rounded-2xl font-black text-sm hover:bg-slate-200 transition-all"
+                                >
+                                    ตกลง
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+
                 {selectedStudentForAbsenceDetails && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
                         <motion.div 

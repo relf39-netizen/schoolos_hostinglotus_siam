@@ -63,8 +63,20 @@ class QueryBuilder {
                 
                 // Normalize for comparison
                 if (key === 'date' || key.endsWith('_at')) {
-                  if (itemVal && typeof itemVal === 'string') itemVal = itemVal.split('T')[0];
-                  if (filterVal && typeof filterVal === 'string') filterVal = filterVal.split('T')[0];
+                  const normalizeDate = (val: any) => {
+                    if (!val) return val;
+                    try {
+                      const d = new Date(val);
+                      if (!isNaN(d.getTime())) {
+                        return d.toISOString().split('T')[0];
+                      }
+                    } catch (e) {}
+                    if (typeof val === 'string') return val.split('T')[0];
+                    return val;
+                  };
+                  
+                  itemVal = normalizeDate(itemVal);
+                  filterVal = normalizeDate(filterVal);
                 }
                 
                 if (String(itemVal).toLowerCase() !== String(filterVal).toLowerCase()) {
