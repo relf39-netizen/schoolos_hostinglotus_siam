@@ -131,7 +131,7 @@ app.use('/api', (req, res, next) => {
 });
 
 // DATA SYNC (Base64 fallback for strict firewalls)
-app.post('/api/v1/sync-base64/:table', async (req, res) => {
+app.post('/api/v1/sync-records/:table', async (req, res) => {
   const { table } = req.params;
   try {
     if (!req.body.encodedData) {

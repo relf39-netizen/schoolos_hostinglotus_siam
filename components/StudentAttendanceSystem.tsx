@@ -510,17 +510,20 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
     }, [historyAttendance, students, selectedClass]);
 
     const fetchAttendance = async (date: string) => {
-        if (!supabase) return;
+        if (!supabase || !currentUser?.schoolId) return;
+        
+        setIsLoading(true);
         try {
             const { data, error } = await supabase
                 .from('student_attendance')
                 .select('*')
-                .eq('school_id', currentUser.schoolId)
+                .eq('school_id', String(currentUser.schoolId))
                 .eq('date', date);
             
             if (error) throw error;
+            
             if (data) {
-                setAttendance(data.map((a: any) => ({
+                const normalizedData = data.map((a: any) => ({
                     id: a.id,
                     schoolId: a.school_id,
                     studentId: a.student_id,
@@ -529,10 +532,13 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
                     academicYear: a.academic_year,
                     createdBy: a.created_by,
                     createdAt: a.created_at
-                })));
+                }));
+                setAttendance(normalizedData);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching attendance:', error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -550,7 +556,7 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             const existing = attendance.find(a => {
                 const aDate = typeof a.date === 'string' ? a.date.split('T')[0] : a.date;
                 const sDate = selectedDate.split('T')[0];
-                return a.studentId === s.id && aDate === sDate;
+                return a.studentId.toLowerCase() === s.id.toLowerCase() && aDate === sDate;
             });
             initial[s.id] = existing ? existing.status : 'Present';
         });
@@ -689,7 +695,7 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
         const classAttendance = attendance.filter(a => {
             const aDate = typeof a.date === 'string' ? a.date.split('T')[0] : a.date;
             const sDate = selectedDate.split('T')[0];
-            return aDate === sDate && classStudents.some(s => s.id === a.studentId);
+            return aDate === sDate && classStudents.some(s => s.id.toLowerCase() === a.studentId.toLowerCase());
         });
         
         const stats = {
@@ -888,7 +894,7 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
                                         const record = attendance.find(a => {
                                             const aDate = typeof a.date === 'string' ? a.date.split('T')[0] : a.date;
                                             const sDate = selectedDate.split('T')[0];
-                                            return a.studentId === student.id && aDate === sDate;
+                                            return a.studentId.toLowerCase() === student.id.toLowerCase() && aDate === sDate;
                                         });
                                         const absenceData = studentAbsenceCounts[student.id];
                                         return (

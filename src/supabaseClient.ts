@@ -49,7 +49,33 @@ class QueryBuilder {
       if (response.ok) {
         try {
           const result = JSON.parse(text);
-          resolve({ data: result.data, error: null });
+          let data = result.data;
+          
+          // Apply local filtering for date normalization if needed
+          if (Array.isArray(data) && (this.filters.date || this.filters.school_id)) {
+            data = data.filter((item: any) => {
+              let match = true;
+              Object.entries(this.filters).forEach(([key, value]) => {
+                if (!match) return;
+                
+                let itemVal = item[key];
+                let filterVal = value;
+                
+                // Normalize for comparison
+                if (key === 'date' || key.endsWith('_at')) {
+                  if (itemVal && typeof itemVal === 'string') itemVal = itemVal.split('T')[0];
+                  if (filterVal && typeof filterVal === 'string') filterVal = filterVal.split('T')[0];
+                }
+                
+                if (String(itemVal).toLowerCase() !== String(filterVal).toLowerCase()) {
+                  match = false;
+                }
+              });
+              return match;
+            });
+          }
+          
+          resolve({ data, error: null });
         } catch (e) {
           const errorMsg = `Server returned HTML instead of JSON for table "${this.table}". \n\nResponse snippet: ${text.substring(0, 200)}...`;
           resolve({ data: null, error: { message: errorMsg } });
@@ -262,7 +288,7 @@ export const supabase: any = {
         const execute = async () => {
           try {
             const items = Array.isArray(data) ? data : [data];
-            const chunkSize = 5; 
+            const chunkSize = 3; 
             const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
             const allResults = [];
@@ -299,7 +325,7 @@ export const supabase: any = {
                     const jsonString = JSON.stringify(chunk);
                     const encodedData = b64EncodeUnicode(jsonString);
 
-                    const b64Response = await fetch(`${API_URL}/v1/sync-base64/${table}`, {
+                    const b64Response = await fetch(`${API_URL}/v1/sync-records/${table}`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ encodedData })
@@ -314,18 +340,18 @@ export const supabase: any = {
                         success = true;
                       } else {
                         if (attempts >= maxAttempts) return { data: null, error: { message: b64Result.error || "Firewall blocked Base64 request" } };
-                        await delay(500 * attempts);
+                        await delay(1000 * attempts);
                       }
                     } catch (b64E) {
                       if (attempts >= maxAttempts) {
                         return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
                       }
-                      await delay(500 * attempts);
+                      await delay(1000 * attempts);
                     }
                   }
                 } catch (fetchError: any) {
                   if (attempts >= maxAttempts) return { data: null, error: { message: `ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้: ${fetchError.message}` } };
-                  await delay(500 * attempts);
+                  await delay(1000 * attempts);
                 }
               }
             }
