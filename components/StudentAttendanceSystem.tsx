@@ -547,7 +547,11 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
         const classStudents = students.filter(s => s.currentClass === selectedClass);
         
         classStudents.forEach(s => {
-            const existing = attendance.find(a => a.studentId === s.id && a.date === selectedDate);
+            const existing = attendance.find(a => {
+                const aDate = typeof a.date === 'string' ? a.date.split('T')[0] : a.date;
+                const sDate = selectedDate.split('T')[0];
+                return a.studentId === s.id && aDate === sDate;
+            });
             initial[s.id] = existing ? existing.status : 'Present';
         });
         
@@ -561,6 +565,18 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
         if (!currentAcademicYear) {
             alert('ไม่พบข้อมูลปีการศึกษาปัจจุบัน กรุณาตั้งค่าปีการศึกษาในหน้าจัดการข้อมูล (Manage Academic Years) และเลือกปีปัจจุบันก่อน');
             return;
+        }
+
+        // Check if attendance already exists for this class and date
+        const classStudents = students.filter(s => s.currentClass === selectedClass);
+        const existingRecords = attendance.filter(a => 
+            a.date === selectedDate && 
+            classStudents.some(s => s.id === a.studentId)
+        );
+
+        if (existingRecords.length > 0) {
+            const confirmOverwrite = window.confirm(`คุณเคยบันทึกข้อมูลการมาเรียนของชั้น ${selectedClass} ในวันที่ ${formatToThaiDate(selectedDate)} ไปแล้ว \n\nคุณต้องการบันทึกทับข้อมูลเดิมใช่หรือไม่?`);
+            if (!confirmOverwrite) return;
         }
 
         setIsSaving(true);
@@ -622,7 +638,11 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
 
         classRooms.forEach(cls => {
             const classStudents = students.filter(s => s.currentClass === cls.name);
-            const classAttendance = attendance.filter(a => classStudents.some(s => s.id === a.studentId));
+            const classAttendance = attendance.filter(a => {
+                const aDate = typeof a.date === 'string' ? a.date.split('T')[0] : a.date;
+                const sDate = selectedDate.split('T')[0];
+                return aDate === sDate && classStudents.some(s => s.id === a.studentId);
+            });
             
             statsByClass[cls.name] = {
                 present: classAttendance.filter(a => a.status === 'Present').length,
@@ -665,7 +685,12 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
 
     const dailyStats = useMemo(() => {
         const classStudents = students.filter(s => s.currentClass === selectedClass);
-        const classAttendance = attendance.filter(a => a.date === selectedDate && classStudents.some(s => s.id === a.studentId));
+        // Normalize dates for comparison to avoid timezone or format mismatches
+        const classAttendance = attendance.filter(a => {
+            const aDate = typeof a.date === 'string' ? a.date.split('T')[0] : a.date;
+            const sDate = selectedDate.split('T')[0];
+            return aDate === sDate && classStudents.some(s => s.id === a.studentId);
+        });
         
         const stats = {
             present: classAttendance.filter(a => a.status === 'Present').length,
@@ -860,7 +885,11 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
                                     <div className="text-center py-12 text-slate-400 italic">ไม่พบรายชื่อนักเรียนในชั้นนี้</div>
                                 ) : (
                                     students.filter(s => s.currentClass === selectedClass).map((student, idx) => {
-                                        const record = attendance.find(a => a.studentId === student.id && a.date === selectedDate);
+                                        const record = attendance.find(a => {
+                                            const aDate = typeof a.date === 'string' ? a.date.split('T')[0] : a.date;
+                                            const sDate = selectedDate.split('T')[0];
+                                            return a.studentId === student.id && aDate === sDate;
+                                        });
                                         const absenceData = studentAbsenceCounts[student.id];
                                         return (
                                             <div key={student.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
