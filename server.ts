@@ -150,15 +150,24 @@ app.post('/api/v1/transfer/:table', async (req, res) => {
 
     console.log(`[API] Transferring ${items.length} items into ${table}`);
     
+    const uuidTables = ['class_rooms', 'students', 'student_savings', 'academic_years', 'student_attendance', 'student_health_records', 'director_events', 'finance_accounts', 'finance_transactions'];
+
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
       
       for (const item of items) {
-        const keys = Object.keys(item);
+        const processedData = { ...item };
+        
+        // Generate UUID if missing for certain tables
+        if (uuidTables.includes(table) && !processedData.id) {
+          processedData.id = uuidv4();
+        }
+
+        const keys = Object.keys(processedData);
         if (keys.length === 0) continue;
 
-        const values = Object.values(item).map(v => (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v);
+        const values = Object.values(processedData).map(v => (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v);
         
         const placeholders = keys.map(() => '?').join(', ');
         const updateClause = keys.map(k => `?? = VALUES(??)`).join(', ');
@@ -174,7 +183,7 @@ app.post('/api/v1/transfer/:table', async (req, res) => {
       return res.status(200).json({ success: true });
     } catch (err: any) {
       await connection.rollback();
-      console.error(`[DATABASE ERROR] ${err.message}`);
+      console.error(`[DATABASE ERROR] Transfer failed for ${table}: ${err.message}`);
       return res.status(500).json({ error: `Database error: ${err.message}` });
     } finally {
       connection.release();
@@ -357,6 +366,36 @@ app.post('/api/maintenance/fix-schema', async (req, res) => {
           reason TEXT,
           status VARCHAR(50),
           attachments LONGTEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Fix student_health_records table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS student_health_records (
+          id VARCHAR(36) PRIMARY KEY,
+          student_id VARCHAR(36),
+          school_id VARCHAR(36),
+          weight DECIMAL(5,2),
+          height DECIMAL(5,2),
+          recorded_at DATETIME,
+          academic_year VARCHAR(20),
+          recorded_by VARCHAR(36),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Fix student_attendance table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS student_attendance (
+          id VARCHAR(36) PRIMARY KEY,
+          student_id VARCHAR(36),
+          school_id VARCHAR(36),
+          class_name VARCHAR(50),
+          status VARCHAR(20),
+          recorded_at DATE,
+          academic_year VARCHAR(20),
+          recorded_by VARCHAR(36),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);

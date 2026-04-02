@@ -43,6 +43,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     const [migrationConfig, setMigrationConfig] = useState({ url: '', key: '' });
     const [isMigrating, setIsMigrating] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
+    const [isFixingSchema, setIsFixingSchema] = useState(false);
     const [isTestingConnection, setIsTestingConnection] = useState(false);
     const [migrationStatus, setMigrationStatus] = useState<Record<string, 'idle' | 'loading' | 'success' | 'error'>>({});
     const [migrationProgress, setMigrationProgress] = useState<Record<string, string>>({});
@@ -209,6 +210,24 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             alert(`❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: ${err.message}`);
         } finally {
             setIsTestingConnection(false);
+        }
+    };
+
+    const handleFixSchema = async () => {
+        if (!confirm("ยืนยันการตรวจสอบและแก้ไขโครงสร้างฐานข้อมูล? ระบบจะสร้างตารางที่ขาดหายไปโดยไม่กระทบข้อมูลเดิม")) return;
+        setIsFixingSchema(true);
+        try {
+            const response = await fetch('/api/maintenance/fix-schema', { method: 'POST' });
+            const result = await response.json();
+            if (result.success) {
+                alert("แก้ไขโครงสร้างฐานข้อมูลสำเร็จ: " + result.message);
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (err: any) {
+            alert("ขัดข้อง: " + err.message);
+        } finally {
+            setIsFixingSchema(false);
         }
     };
 
@@ -575,11 +594,20 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
                                     <button 
                                         onClick={handleExportSQL}
-                                        disabled={isMigrating || isExporting || isTestingConnection}
+                                        disabled={isMigrating || isExporting || isTestingConnection || isFixingSchema}
                                         className="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-black shadow-xl hover:bg-slate-900 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                                     >
                                         {isExporting ? <Loader2 className="animate-spin" size={20}/> : <Download size={20}/>}
                                         {isExporting ? 'กำลังเตรียมไฟล์ SQL...' : 'ดาวน์โหลดไฟล์ SQL'}
+                                    </button>
+
+                                    <button 
+                                        onClick={handleFixSchema}
+                                        disabled={isMigrating || isExporting || isTestingConnection || isFixingSchema}
+                                        className="flex-1 py-4 bg-amber-600 text-white rounded-2xl font-black shadow-xl hover:bg-amber-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                                    >
+                                        {isFixingSchema ? <Loader2 className="animate-spin" size={20}/> : <Settings size={20}/>}
+                                        {isFixingSchema ? 'กำลังแก้ไข...' : 'แก้ไขโครงสร้าง DB'}
                                     </button>
                                 </div>
                             </div>

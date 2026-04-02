@@ -51,7 +51,7 @@ class QueryBuilder {
           const result = JSON.parse(text);
           resolve({ data: result.data, error: null });
         } catch (e) {
-          const errorMsg = `Server returned HTML instead of JSON for table "${this.table}". \n\nResponse snippet: ${text.substring(0, 100)}...`;
+          const errorMsg = `Server returned HTML instead of JSON for table "${this.table}". \n\nResponse snippet: ${text.substring(0, 200)}...`;
           resolve({ data: null, error: { message: errorMsg } });
         }
       } else {
@@ -59,7 +59,7 @@ class QueryBuilder {
           const result = JSON.parse(text);
           resolve({ data: null, error: { message: result.error || "Unknown server error" } });
         } catch (e) {
-          const errorMsg = `Server error (${response.status}) for table "${this.table}". \n\nResponse snippet: ${text.substring(0, 100)}...`;
+          const errorMsg = `Server error (${response.status}) for table "${this.table}". \n\nResponse snippet: ${text.substring(0, 200)}...`;
           resolve({ data: null, error: { message: errorMsg } });
         }
       }
@@ -163,7 +163,7 @@ export const supabase: any = {
                 const b64Result = JSON.parse(b64Text);
                 return b64Response.ok ? { data: b64Result.data, error: null } : { data: null, error: { message: b64Result.error } };
               } catch (b64E) {
-                return { data: null, error: { message: "Server returned non-JSON response during Base64 fallback." } };
+                return { data: null, error: { message: `Server returned non-JSON response during Base64 fallback. \n\nSnippet: ${b64Text.substring(0, 200)}...` } };
               }
             }
           } catch (error: any) {

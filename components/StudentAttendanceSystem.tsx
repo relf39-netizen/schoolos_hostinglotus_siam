@@ -294,7 +294,7 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
                     school_id: currentUser.schoolId,
                     weight: parseFloat(newWeight),
                     height: parseFloat(newHeight),
-                    recorded_at: new Date().toISOString(),
+                    recorded_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
                     academic_year: currentAcademicYear,
                     recorded_by: currentUser.id
                 }]);
