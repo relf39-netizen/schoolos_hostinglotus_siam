@@ -439,10 +439,18 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             }
 
             // 2. Fetch Students first to derive classes if needed
-            const { data: studentsData } = await supabase
+            console.log(`Fetching students for school_id: ${currentUser.schoolId}`);
+            const { data: studentsData, error: studentsError } = await supabase
                 .from('students')
                 .select('*')
                 .eq('school_id', currentUser.schoolId);
+            
+            if (studentsError) {
+                console.error("Error fetching students:", studentsError);
+                throw new Error(`ไม่สามารถดึงข้อมูลนักเรียนได้: ${studentsError.message}`);
+            }
+
+            console.log(`Fetched students:`, studentsData?.length || 0);
             
             let mappedStudents: Student[] = [];
             if (studentsData) {

@@ -237,6 +237,8 @@ app.get('/api/:table', async (req, res) => {
       sql += ` ORDER BY created_at DESC`;
     }
 
+    console.log(`[API GET] Table: ${table}, SQL: ${sql}, Params:`, params);
+
     const [rows]: any = await pool.query(sql, params);
     
     // Parse JSON fields based on table
@@ -349,8 +351,7 @@ app.post('/api/maintenance/fix-schema', async (req, res) => {
         )
       `);
 
-      // Fix student_savings table (Transactions as used in frontend)
-      await connection.query("DROP TABLE IF EXISTS student_savings");
+      // Fix student_savings table
       await connection.query(`
         CREATE TABLE IF NOT EXISTS student_savings (
           id VARCHAR(36) PRIMARY KEY,
@@ -367,17 +368,69 @@ app.post('/api/maintenance/fix-schema', async (req, res) => {
         )
       `);
 
-      // Fix savings_transactions table (Optional, keeping for compatibility)
+      // Fix students table
       await connection.query(`
-        CREATE TABLE IF NOT EXISTS savings_transactions (
+        CREATE TABLE IF NOT EXISTS students (
+          id VARCHAR(36) PRIMARY KEY,
+          school_id VARCHAR(50),
+          name VARCHAR(255) NOT NULL,
+          current_class VARCHAR(50) NOT NULL,
+          academic_year VARCHAR(50) NOT NULL,
+          is_active BOOLEAN DEFAULT TRUE,
+          photo_url TEXT,
+          address TEXT,
+          phone_number VARCHAR(50),
+          father_name VARCHAR(255),
+          mother_name VARCHAR(255),
+          guardian_name VARCHAR(255),
+          medical_conditions TEXT,
+          family_annual_income DOUBLE,
+          lat DOUBLE,
+          lng DOUBLE,
+          is_alumni BOOLEAN DEFAULT FALSE,
+          graduation_year VARCHAR(50),
+          batch_number VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Fix class_rooms table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS class_rooms (
+          id VARCHAR(36) PRIMARY KEY,
+          school_id VARCHAR(50),
+          name VARCHAR(255) NOT NULL,
+          academic_year VARCHAR(50) NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Fix student_attendance table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS student_attendance (
           id VARCHAR(36) PRIMARY KEY,
           school_id VARCHAR(50),
           student_id VARCHAR(36),
-          type VARCHAR(20) NOT NULL,
-          amount DECIMAL(15,2) NOT NULL,
-          balance_after DECIMAL(15,2) NOT NULL,
-          description TEXT,
+          date DATE NOT NULL,
+          status VARCHAR(50) NOT NULL,
+          academic_year VARCHAR(50) NOT NULL,
           created_by VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(student_id, date)
+        )
+      `);
+
+      // Fix student_health_records table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS student_health_records (
+          id VARCHAR(36) PRIMARY KEY,
+          student_id VARCHAR(36),
+          school_id VARCHAR(50),
+          weight DECIMAL(5,2),
+          height DECIMAL(5,2),
+          recorded_at DATETIME,
+          academic_year VARCHAR(20),
+          recorded_by VARCHAR(100),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);
@@ -398,34 +451,14 @@ app.post('/api/maintenance/fix-schema', async (req, res) => {
         )
       `);
 
-      // Fix student_health_records table
+      // Fix academic_years table
       await connection.query(`
-        CREATE TABLE IF NOT EXISTS student_health_records (
-          id VARCHAR(36) PRIMARY KEY,
-          student_id VARCHAR(36),
-          school_id VARCHAR(36),
-          weight DECIMAL(5,2),
-          height DECIMAL(5,2),
-          recorded_at DATETIME,
-          academic_year VARCHAR(20),
-          recorded_by VARCHAR(36),
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-
-      // Fix student_attendance table (Drop and recreate to fix incorrect columns from previous version)
-      await connection.query("DROP TABLE IF EXISTS student_attendance");
-      await connection.query(`
-        CREATE TABLE IF NOT EXISTS student_attendance (
+        CREATE TABLE IF NOT EXISTS academic_years (
           id VARCHAR(36) PRIMARY KEY,
           school_id VARCHAR(50),
-          student_id VARCHAR(36),
-          date DATE NOT NULL,
-          status VARCHAR(50) NOT NULL,
-          academic_year VARCHAR(50) NOT NULL,
-          created_by VARCHAR(100),
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(student_id, date)
+          year VARCHAR(50) NOT NULL,
+          is_current BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `);
 
