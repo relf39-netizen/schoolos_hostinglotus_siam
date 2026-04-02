@@ -379,9 +379,7 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             const { data: studentsData } = await supabase
                 .from('students')
                 .select('*')
-                .eq('school_id', currentUser.schoolId)
-                .eq('is_active', true)
-                .eq('is_alumni', false);
+                .eq('school_id', currentUser.schoolId);
             
             let mappedStudents: Student[] = [];
             if (studentsData) {

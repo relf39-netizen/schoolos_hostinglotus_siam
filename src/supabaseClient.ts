@@ -30,7 +30,15 @@ class QueryBuilder {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for migration
 
-      const queryParams = new URLSearchParams(this.filters).toString();
+      // Convert boolean filters to 1/0 for MySQL compatibility
+      const processedFilters: Record<string, any> = {};
+      Object.entries(this.filters).forEach(([key, value]) => {
+        if (value === true) processedFilters[key] = '1';
+        else if (value === false) processedFilters[key] = '0';
+        else processedFilters[key] = value;
+      });
+
+      const queryParams = new URLSearchParams(processedFilters).toString();
       const response = await fetch(`${API_URL}/${this.table}?${queryParams}`, {
         signal: controller.signal
       });
