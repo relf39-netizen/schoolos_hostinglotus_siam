@@ -6,7 +6,7 @@ import {
     Search, Users, Power, PowerOff, 
     ArrowLeft, Edit, Key, User as UserIcon, Eye, EyeOff,
     Clock, Check, ShieldPlus, UserMinus, Database,
-    ArrowRight, AlertCircle, Download
+    ArrowRight, AlertCircle, Download, Settings
 } from 'lucide-react';
 import { supabase, isConfigured as isSupabaseConfigured } from '@/supabaseClient';
 
