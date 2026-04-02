@@ -270,8 +270,8 @@ export const supabase: any = {
             for (let i = 0; i < items.length; i += chunkSize) {
               const chunk = items.slice(i, i + chunkSize);
               
-              // เพิ่มการรอระหว่างรายการ (เพิ่มเป็น 1.5 วินาทีเพื่อความชัวร์)
-              if (i > 0) await delay(1500);
+              // เพิ่มการรอระหว่างรายการ
+              if (i > 0) await delay(1000);
 
               let success = false;
               let attempts = 0;
@@ -281,7 +281,7 @@ export const supabase: any = {
                 attempts++;
                 try {
                   // ลองส่งแบบ JSON ปกติก่อน
-                  const response = await fetch(`${API_URL}/v1/transfer/${table}`, {
+                  const response = await fetch(`${API_URL}/v1/db-sync/${table}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(chunk)
@@ -302,7 +302,7 @@ export const supabase: any = {
                     const jsonString = JSON.stringify(chunk);
                     const encodedData = b64EncodeUnicode(jsonString);
 
-                    const b64Response = await fetch(`${API_URL}/v1/transfer/${table}`, {
+                    const b64Response = await fetch(`${API_URL}/v1/db-sync/${table}`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ encodedData })
@@ -315,18 +315,18 @@ export const supabase: any = {
                         success = true;
                       } else {
                         if (attempts >= maxAttempts) return { data: null, error: { message: b64Result.error || "Firewall blocked Base64 request" } };
-                        await delay(2000 * attempts); // รอเพิ่มขึ้นก่อนลองใหม่
+                        await delay(1000 * attempts);
                       }
                     } catch (b64E) {
                       if (attempts >= maxAttempts) {
-                        return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (อาจเพราะข้อมูลมีขนาดใหญ่เกินไป หรือติด Firewall ขั้นรุนแรง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+                        return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
                       }
-                      await delay(2000 * attempts);
+                      await delay(1000 * attempts);
                     }
                   }
                 } catch (fetchError: any) {
                   if (attempts >= maxAttempts) return { data: null, error: { message: `ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้: ${fetchError.message}` } };
-                  await delay(2000 * attempts);
+                  await delay(1000 * attempts);
                 }
               }
             }

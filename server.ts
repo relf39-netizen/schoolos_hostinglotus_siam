@@ -130,8 +130,8 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// DATA TRANSFER (Special case for migration) - Using Base64 to bypass strict firewalls
-app.post('/api/v1/transfer/:table', async (req, res) => {
+// DATA SYNC (Special case for migration/upsert) - Using Base64 to bypass strict firewalls
+app.post('/api/v1/db-sync/:table', async (req, res) => {
   const { table } = req.params;
   try {
     let items = [];
@@ -145,10 +145,10 @@ app.post('/api/v1/transfer/:table', async (req, res) => {
     }
     
     if (items.length === 0) {
-      return res.json({ success: true, message: 'No items to transfer' });
+      return res.json({ success: true, message: 'No items to sync' });
     }
 
-    console.log(`[API] Transferring ${items.length} items into ${table}`);
+    console.log(`[API] Syncing ${items.length} items into ${table}`);
     
     const uuidTables = ['class_rooms', 'students', 'student_savings', 'academic_years', 'student_attendance', 'student_health_records', 'director_events', 'finance_accounts', 'finance_transactions'];
 
@@ -170,11 +170,17 @@ app.post('/api/v1/transfer/:table', async (req, res) => {
         const values = Object.values(processedData).map(v => (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v);
         
         const placeholders = keys.map(() => '?').join(', ');
-        const updateClause = keys.map(k => `?? = VALUES(??)`).join(', ');
-        const updateParams = keys.flatMap(k => [k, k]);
+        // Use a more standard MySQL upsert syntax
+        const updateClause = keys.filter(k => k !== 'id').map(k => `?? = VALUES(??)`).join(', ');
+        const updateParams = keys.filter(k => k !== 'id').flatMap(k => [k, k]);
 
-        const sql = `INSERT INTO ?? (??) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`;
-        const params = [table, keys, ...values, ...updateParams];
+        let sql = `INSERT INTO ?? (??) VALUES (${placeholders})`;
+        let params = [table, keys, ...values];
+
+        if (updateClause) {
+          sql += ` ON DUPLICATE KEY UPDATE ${updateClause}`;
+          params.push(...updateParams);
+        }
         
         await connection.query(sql, params);
       }
@@ -183,13 +189,13 @@ app.post('/api/v1/transfer/:table', async (req, res) => {
       return res.status(200).json({ success: true });
     } catch (err: any) {
       await connection.rollback();
-      console.error(`[DATABASE ERROR] Transfer failed for ${table}: ${err.message}`);
+      console.error(`[DATABASE ERROR] Sync failed for ${table}: ${err.message}`);
       return res.status(500).json({ error: `Database error: ${err.message}` });
     } finally {
       connection.release();
     }
   } catch (error: any) {
-    console.error(`[API ERROR] Transfer failed for ${table}:`, error);
+    console.error(`[API ERROR] Sync failed for ${table}:`, error);
     return res.status(500).json({ error: `Internal server error: ${error.message}` });
   }
 });

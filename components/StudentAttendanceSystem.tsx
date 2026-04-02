@@ -581,14 +581,19 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             }
 
             // Send in chunks to avoid payload size issues
-            const chunkSize = 10;
+            const chunkSize = 5; // Small chunks
             for (let i = 0; i < records.length; i += chunkSize) {
                 const chunk = records.slice(i, i + chunkSize);
+                console.log(`Saving attendance chunk ${i/chunkSize + 1}...`, chunk);
+                
                 const { error } = await supabase
                     .from('student_attendance')
                     .upsert(chunk, { onConflict: 'student_id, date' });
 
-                if (error) throw error;
+                if (error) {
+                    console.error('Upsert error at chunk:', i, error);
+                    throw error;
+                }
             }
             
             alert('บันทึกข้อมูลการมาเรียนเรียบร้อยแล้ว');
