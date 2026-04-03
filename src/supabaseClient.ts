@@ -72,7 +72,7 @@ class QueryBuilder {
 
       const queryParams = new URLSearchParams(toSnakeCase(processedFilters)).toString();
       const fullUrl = `${API_URL}/${this.table}?${queryParams}`;
-      console.log(`[Supabase Mock] GET ${fullUrl}`);
+      console.log(`[Supabase Mock] GET ${fullUrl}`, { filters: this.filters, processedFilters });
       
       const response = await fetch(fullUrl, {
         signal: controller.signal
@@ -183,19 +183,18 @@ export const supabase: any = {
             try {
               result = JSON.parse(text);
               if (!response.ok) {
-                // If JSON failed, try Base64 fallback (might be WAF blocking large JSON)
                 throw new Error(result.error || "JSON Insert failed");
               }
               return { data: toCamelCase(result.data), error: null };
             } catch (e) {
-              console.warn(`Insert JSON failed for ${table}, retrying with Base64...`);
-              const jsonString = JSON.stringify(snakeData);
-              const encodedData = b64EncodeUnicode(jsonString);
+              console.warn(`Insert JSON failed for ${table}, retrying with Bridge...`);
+              const payload = { action: 'insert', table, data: snakeData };
+              const p = b64EncodeUnicode(JSON.stringify(payload));
 
-              const b64Response = await fetch(`${API_URL}/v1/sync-base64/${table}`, {
+              const b64Response = await fetch(`${API_URL}/v1/bridge`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ encodedData })
+                body: JSON.stringify({ p })
               });
 
               const b64Text = await b64Response.text();
@@ -233,16 +232,14 @@ export const supabase: any = {
                   }
                   return { data: toCamelCase(result.data), error: null };
                 } catch (e) {
-                  // Fallback to sync endpoint for updates if PATCH fails (WAF/Size)
-                  console.warn(`Update JSON failed for ${table}, retrying with Base64 Sync...`);
-                  const payload = { ...snakeData, [toSnakeCase(column)]: value }; // Ensure ID is included for upsert-like behavior
-                  const jsonString = JSON.stringify([payload]);
-                  const encodedData = b64EncodeUnicode(jsonString);
+                  console.warn(`Update JSON failed for ${table}, retrying with Bridge...`);
+                  const payload = { action: 'update', table, data: snakeData, id: value, pk: toSnakeCase(column) };
+                  const p = b64EncodeUnicode(JSON.stringify(payload));
 
-                  const b64Response = await fetch(`${API_URL}/v1/sync-base64/${table}`, {
+                  const b64Response = await fetch(`${API_URL}/v1/bridge`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ encodedData })
+                    body: JSON.stringify({ p })
                   });
 
                   const b64Text = await b64Response.text();
@@ -272,25 +269,32 @@ export const supabase: any = {
                     method: 'DELETE'
                   });
                   
-                  const contentType = response.headers.get("content-type");
-                  if (!contentType || !contentType.includes("application/json")) {
-                    // Fallback to POST delete if DELETE fails (WAF/Size)
-                    console.warn(`Delete JSON failed for ${table}, retrying with POST...`);
-                    const fallbackResponse = await fetch(`${API_URL}/${table}/${value}/delete`, {
-                      method: 'POST'
-                    });
-                    const fallbackText = await fallbackResponse.text();
-                    try {
-                      const fallbackResult = JSON.parse(fallbackText);
-                      resolve(fallbackResponse.ok ? { data: true, error: null } : { data: null, error: { message: fallbackResult.error } });
-                    } catch (e) {
-                      resolve({ data: null, error: { message: "Server returned non-JSON response during delete fallback." } });
+                  const text = await response.text();
+                  try {
+                    const result = JSON.parse(text);
+                    if (!response.ok) {
+                      throw new Error(result.error || "JSON Delete failed");
                     }
-                    return;
-                  }
+                    resolve({ data: true, error: null });
+                  } catch (e) {
+                    console.warn(`Delete JSON failed for ${table}, retrying with Bridge...`);
+                    const payload = { action: 'delete', table, id: value, pk: toSnakeCase(column) };
+                    const p = b64EncodeUnicode(JSON.stringify(payload));
 
-                  const result = await response.json();
-                  resolve(response.ok ? { data: true, error: null } : { data: null, error: { message: result.error } });
+                    const b64Response = await fetch(`${API_URL}/v1/bridge`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ p })
+                    });
+
+                    const b64Text = await b64Response.text();
+                    try {
+                      const b64Result = JSON.parse(b64Text);
+                      resolve(b64Response.ok ? { data: true, error: null } : { data: null, error: { message: b64Result.error } });
+                    } catch (b64E) {
+                      resolve({ data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } });
+                    }
+                  }
                 } catch (error: any) {
                   resolve({ data: null, error: { message: error.message } });
                 }
@@ -319,7 +323,6 @@ export const supabase: any = {
               while (!success && attempts < maxAttempts) {
                 attempts++;
                 try {
-                  // Use the standard POST endpoint which now handles upserts
                   const response = await fetch(`${API_URL}/${table}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -337,14 +340,14 @@ export const supabase: any = {
                       throw new Error(result.error || "Server rejected JSON");
                     }
                   } catch (e) {
-                    console.warn(`Upsert JSON failed for ${table}, retrying with Base64...`);
-                    const jsonString = JSON.stringify(chunk);
-                    const encodedData = b64EncodeUnicode(jsonString);
+                    console.warn(`Upsert JSON failed for ${table}, retrying with Bridge...`);
+                    const payload = { action: 'upsert', table, data: chunk };
+                    const p = b64EncodeUnicode(JSON.stringify(payload));
 
-                    const b64Response = await fetch(`${API_URL}/v1/sync-records/${table}`, {
+                    const b64Response = await fetch(`${API_URL}/v1/bridge`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ encodedData })
+                      body: JSON.stringify({ p })
                     });
 
                     const b64Text = await b64Response.text();
@@ -355,7 +358,7 @@ export const supabase: any = {
                         allResults.push(...(Array.isArray(b64ResultData) ? b64ResultData : [b64ResultData]));
                         success = true;
                       } else {
-                        if (attempts >= maxAttempts) return { data: null, error: { message: b64Result.error || "Firewall blocked Base64 request" } };
+                        if (attempts >= maxAttempts) return { data: null, error: { message: b64Result.error || "Firewall blocked Bridge request" } };
                         await delay(1000 * attempts);
                       }
                     } catch (b64E) {

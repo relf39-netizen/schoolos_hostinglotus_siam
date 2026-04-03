@@ -602,26 +602,16 @@ function setTelegramWebhook() {
     const handleDeleteStudent = async (id: string) => {
         if (!confirm('ยืนยันลบนักเรียน?')) return;
         try {
-            // Try DELETE first
-            let response = await fetch(`/api/students/${id}`, {
-                method: 'DELETE'
-            });
-            let result = await response.json();
+            const { error } = await supabase
+                .from('students')
+                .delete()
+                .eq('id', id);
             
-            // Fallback to POST /delete if DELETE is blocked
-            if (!response.ok || !result.success) {
-                console.warn("DELETE failed, trying POST fallback...");
-                response = await fetch(`/api/students/${id}/delete`, {
-                    method: 'POST'
-                });
-                result = await response.json();
-            }
-
-            if (result.success) {
+            if (!error) {
                 fetchStudentData();
                 alert('ลบนักเรียนสำเร็จ');
             } else {
-                throw new Error(result.error || 'Failed to delete student');
+                throw new Error(error.message || 'Failed to delete student');
             }
         } catch (err: any) { 
             console.error(err);

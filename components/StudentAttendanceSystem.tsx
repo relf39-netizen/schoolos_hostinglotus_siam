@@ -657,15 +657,16 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
         setIsSaving(true);
         try {
             const records = Object.entries(tempAttendance).map(([studentId, status]) => {
-                const existing = existingRecords.find(e => e.student_id.toLowerCase() === studentId.toLowerCase());
+                // Use studentId (camelCase) from existingRecords
+                const existing = existingRecords.find(e => (e.studentId || e.student_id || '').toLowerCase() === studentId.toLowerCase());
                 return {
                     id: existing ? existing.id : undefined,
-                    school_id: currentUser.schoolId,
-                    student_id: studentId,
+                    schoolId: currentUser.schoolId,
+                    studentId: studentId,
                     date: selectedDate,
                     status: status,
-                    academic_year: currentAcademicYear,
-                    created_by: currentUser.id
+                    academicYear: currentAcademicYear,
+                    createdBy: currentUser.id
                 };
             });
 
@@ -681,7 +682,7 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             }
 
             // Send in chunks to avoid payload size issues
-            const chunkSize = 5; // Small chunks
+            const chunkSize = 10; 
             for (let i = 0; i < records.length; i += chunkSize) {
                 const chunk = records.slice(i, i + chunkSize);
                 console.log(`Saving attendance chunk ${i/chunkSize + 1}...`, chunk);
@@ -708,11 +709,10 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             console.error('Error saving attendance:', error);
             // Provide more detailed error info
             const errorMsg = error.message || error.details || 'Unknown error';
-            const errorCode = error.code ? `(Code: ${error.code})` : '';
             setShowAlertModal({
                 show: true,
                 title: 'เกิดข้อผิดพลาด',
-                message: `เกิดข้อผิดพลาดในการบันทึกข้อมูล: ${errorMsg} ${errorCode}`,
+                message: `เกิดข้อผิดพลาดในการบันทึกข้อมูล: ${errorMsg}`,
                 type: 'error'
             });
         } finally {

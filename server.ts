@@ -131,6 +131,43 @@ app.use('/api', (req, res, next) => {
 });
 
 // DATA SYNC (Base64 fallback for strict firewalls)
+app.post('/api/v1/bridge', async (req, res) => {
+  try {
+    if (!req.body.p) {
+      return res.status(400).json({ error: 'Missing payload (p)' });
+    }
+    const decodedString = Buffer.from(req.body.p, 'base64').toString('utf-8');
+    const { action, table, data, id, pk = 'id', onConflict } = JSON.parse(decodedString);
+    console.log('Bridge Request:', { action, table, data, id, pk, onConflict });
+    
+    if (action === 'upsert') {
+      const items = Array.isArray(data) ? data : [data];
+      const results = await performBulkUpsert(table, items);
+      return res.json({ success: true, data: results });
+    }
+
+    if (action === 'delete') {
+      await pool.query(`DELETE FROM ?? WHERE ?? = ?`, [table, pk, id]);
+      return res.json({ success: true });
+    }
+
+    if (action === 'insert') {
+      const [result]: any = await pool.query(`INSERT INTO ?? SET ?`, [table, data]);
+      return res.json({ success: true, id: result.insertId || data.id });
+    }
+
+    if (action === 'update') {
+      await pool.query(`UPDATE ?? SET ? WHERE ?? = ?`, [table, data, pk, id]);
+      return res.json({ success: true });
+    }
+
+    return res.status(400).json({ error: 'Invalid action' });
+  } catch (error: any) {
+    console.error(`[API ERROR] Bridge failed:`, error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/v1/sync-records/:table', async (req, res) => {
   const { table } = req.params;
   try {
