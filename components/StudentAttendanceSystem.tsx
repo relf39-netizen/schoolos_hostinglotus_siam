@@ -120,10 +120,10 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
                 setSchoolConfig({ school_name: schoolData.name });
             }
 
-            // Fetch Director Name
+            // Fetch Director Name (from profiles)
             const { data: teachers } = await supabase
-                .from('teachers')
-                .select('name, roles, position')
+                .from('profiles')
+                .select('full_name, roles, position')
                 .eq('school_id', currentUser.schoolId);
             
             if (teachers) {
@@ -132,7 +132,7 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
                                  teachers.find((t: any) => t.roles?.includes('VICE_DIRECTOR')) ||
                                  teachers.find((t: any) => t.position?.includes('ผู้อำนวยการ'));
                 if (director) {
-                    setDirectorName(director.name);
+                    setDirectorName(director.full_name);
                 }
             }
         };
