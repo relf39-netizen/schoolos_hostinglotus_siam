@@ -400,9 +400,11 @@ function setTelegramWebhook() {
         const fetchConfig = async () => {
         setIsLoadingConfig(true);
         try {
-            const response = await fetch(`/api/school_configs?school_id=${currentSchool.id}`);
-            const result = await response.json();
-            const data = result.data?.[0];
+            const { data: configData } = await supabase
+                .from('school_configs')
+                .select('*')
+                .eq('school_id', currentSchool.id);
+            const data = configData?.[0];
             
             if (data) {
                 setConfig({
@@ -445,11 +447,15 @@ function setTelegramWebhook() {
 
     useEffect(() => {
         const fetchClasses = async () => {
+            if (!supabase) return;
             try {
-                const response = await fetch(`/api/class_rooms?school_id=${currentSchool.id}`);
-                const result = await response.json();
-                if (result.data) {
-                    const uniqueClasses: string[] = Array.from(new Set(result.data.map((c: any) => c.name))).sort() as string[];
+                const { data, error } = await supabase
+                    .from('class_rooms')
+                    .select('name')
+                    .eq('school_id', currentSchool.id);
+                
+                if (data) {
+                    const uniqueClasses: string[] = Array.from(new Set(data.map((c: any) => c.name))).sort() as string[];
                     setAvailableClasses(uniqueClasses);
                 }
             } catch (err) {
@@ -457,7 +463,7 @@ function setTelegramWebhook() {
             }
         };
         fetchClasses();
-    }, [currentSchool.id]);
+    }, [currentSchool.id, supabase]);
 
     const fetchStudentData = async () => {
         if (!supabase) return;
@@ -523,10 +529,9 @@ function setTelegramWebhook() {
         }
 
         try {
-            const response = await fetch('/api/students', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            const { data, error } = await supabase
+                .from('students')
+                .insert({
                     school_id: currentSchool.id,
                     name: newStudentForm.name,
                     current_class: newStudentForm.currentClass,
@@ -541,10 +546,9 @@ function setTelegramWebhook() {
                     medical_conditions: newStudentForm.medicalConditions,
                     lat: newStudentForm.location?.lat,
                     lng: newStudentForm.location?.lng
-                })
-            });
-            const result = await response.json();
-            if (result.data) {
+                });
+            
+            if (!error) {
                 fetchStudentData();
                 setIsAddStudentOpen(false);
                 setNewStudentForm({
@@ -560,7 +564,7 @@ function setTelegramWebhook() {
                 });
                 alert('เพิ่มนักเรียนสำเร็จ');
             } else {
-                throw new Error(result.error || 'Failed to add student');
+                throw new Error(error.message || 'Failed to add student');
             }
         } catch (err: any) { 
             console.error(err);
@@ -571,10 +575,9 @@ function setTelegramWebhook() {
     const handleEditStudent = async () => {
         if (!selectedStudent) return;
         try {
-            const response = await fetch(`/api/students/${selectedStudent.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            const { data, error } = await supabase
+                .from('students')
+                .update({
                     name: selectedStudent.name,
                     current_class: selectedStudent.currentClass,
                     photo_url: selectedStudent.photoUrl,
@@ -587,16 +590,19 @@ function setTelegramWebhook() {
                     lat: selectedStudent.location?.lat,
                     lng: selectedStudent.location?.lng
                 })
-            });
-            const result = await response.json();
-            if (result.data) {
+                .eq('id', selectedStudent.id);
+            
+            if (!error) {
                 fetchStudentData();
                 setIsEditStudentOpen(false);
                 setSelectedStudent(null);
             } else {
-                throw new Error(result.error || 'Failed to update student');
+                throw new Error(error.message || 'Failed to update student');
             }
-        } catch (err) { console.error(err); }
+        } catch (err: any) { 
+            console.error(err);
+            alert('เกิดข้อผิดพลาดในการแก้ไขข้อมูลนักเรียน: ' + err.message);
+        }
     };
 
     const handleDeleteStudent = async (id: string) => {
@@ -623,131 +629,134 @@ function setTelegramWebhook() {
         if (!promoteFromClass || !promoteToClass) return;
         if (!confirm(`เลื่อนชั้นจาก ${promoteFromClass} ไป ${promoteToClass}?`)) return;
         try {
-            const response = await fetch('/api/bulk/students', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    filters: {
-                        school_id: currentSchool.id,
-                        current_class: promoteFromClass,
-                        is_active: 1
-                    },
-                    data: { current_class: promoteToClass }
-                })
-            });
-            const result = await response.json();
-            if (result.success) {
+            const { error } = await supabase
+                .from('students')
+                .update({ current_class: promoteToClass })
+                .eq('school_id', currentSchool.id)
+                .eq('current_class', promoteFromClass)
+                .eq('is_active', true);
+            
+            if (!error) {
                 fetchStudentData();
                 setIsPromoteOpen(false);
                 alert('เลื่อนชั้นสำเร็จ');
             } else {
-                throw new Error(result.error || 'Failed to promote students');
+                throw new Error(error.message || 'Failed to promote students');
             }
-        } catch (err) { console.error(err); }
+        } catch (err: any) { 
+            console.error(err);
+            alert('เกิดข้อผิดพลาดในการเลื่อนชั้น: ' + err.message);
+        }
     };
 
     const handleGraduateStudents = async () => {
         if (!selectedClass || selectedClass === 'All' || !graduationYear) return;
         if (!confirm(`บันทึกนักเรียนชั้น ${selectedClass} เป็นศิษย์เก่า?`)) return;
         try {
-            const response = await fetch('/api/bulk/students', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    filters: {
-                        school_id: currentSchool.id,
-                        current_class: selectedClass,
-                        is_active: 1
-                    },
-                    data: {
-                        is_active: 0,
-                        is_alumni: 1,
-                        graduation_year: graduationYear,
-                        batch_number: batchNumber
-                    }
+            const { error } = await supabase
+                .from('students')
+                .update({ 
+                    is_active: false,
+                    is_alumni: true,
+                    graduation_year: graduationYear,
+                    batch_number: batchNumber
                 })
-            });
-            const result = await response.json();
-            if (result.success) {
+                .eq('school_id', currentSchool.id)
+                .eq('current_class', selectedClass)
+                .eq('is_active', true);
+            
+            if (!error) {
                 fetchStudentData();
                 setIsAlumniOpen(false);
                 alert('บันทึกศิษย์เก่าสำเร็จ');
             } else {
-                throw new Error(result.error || 'Failed to graduate students');
+                throw new Error(error.message || 'Failed to graduate students');
             }
-        } catch (err) { console.error(err); }
+        } catch (err: any) { 
+            console.error(err);
+            alert('เกิดข้อผิดพลาดในการบันทึกศิษย์เก่า: ' + err.message);
+        }
     };
 
     const handleAddClass = async () => {
         if (!newClassName) return;
         try {
-            const response = await fetch('/api/class_rooms', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            const { data, error } = await supabase
+                .from('class_rooms')
+                .insert({
                     school_id: currentSchool.id,
                     name: newClassName,
                     academic_year: currentAcademicYear
-                })
-            });
-            const result = await response.json();
-            if (result.data) {
+                });
+            
+            if (!error) {
                 fetchStudentData();
                 setNewClassName('');
+            } else {
+                throw new Error(error.message || 'Failed to add class');
             }
-        } catch (err) { console.error(err); }
+        } catch (err: any) { 
+            console.error(err);
+            alert('เกิดข้อผิดพลาดในการเพิ่มห้องเรียน: ' + err.message);
+        }
     };
 
     const handleDeleteClass = async (id: string) => {
         if (!confirm('ลบห้องเรียน?')) return;
         try {
-            const response = await fetch(`/api/class_rooms/${id}`, {
-                method: 'DELETE'
-            });
-            const result = await response.json();
-            if (result.success) {
+            const { error } = await supabase
+                .from('class_rooms')
+                .delete()
+                .eq('id', id);
+            
+            if (!error) {
                 fetchStudentData();
+            } else {
+                throw new Error(error.message || 'Failed to delete class');
             }
-        } catch (err) { console.error(err); }
+        } catch (err: any) { 
+            console.error(err);
+            alert('ไม่สามารถลบห้องเรียนได้: ' + err.message);
+        }
     };
 
     const handleAddYear = async () => {
         if (!newYearName) return;
         try {
-            const response = await fetch('/api/academic_years', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            const { error } = await supabase
+                .from('academic_years')
+                .insert({
                     school_id: currentSchool.id,
                     year: newYearName,
                     is_current: academicYears.length === 0
-                })
-            });
-            const result = await response.json();
-            if (result.data) {
+                });
+            
+            if (!error) {
                 fetchStudentData();
                 setNewYearName('');
+            } else {
+                throw new Error(error.message || 'Failed to add academic year');
             }
-        } catch (err) { console.error(err); }
+        } catch (err: any) { 
+            console.error(err);
+            alert('เกิดข้อผิดพลาดในการเพิ่มปีการศึกษา: ' + err.message);
+        }
     };
 
     const handleSetCurrentYear = async (id: string) => {
         try {
-            // Reset all to false
-            await fetch(`/api/bulk/academic_years`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    filters: { school_id: currentSchool.id },
-                    data: { is_current: 0 }
-                })
-            });
+            // Reset all to false for this school
+            await supabase
+                .from('academic_years')
+                .update({ is_current: 0 })
+                .eq('school_id', currentSchool.id);
+
             // Set one to true
-            await fetch(`/api/academic_years/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ is_current: 1 })
-            });
+            await supabase
+                .from('academic_years')
+                .update({ is_current: 1 })
+                .eq('id', id);
+
             fetchStudentData();
         } catch (err) { console.error(err); }
     };
@@ -787,14 +796,16 @@ function setTelegramWebhook() {
             })).filter(s => s.name && s.current_class);
             
             if (toInsert.length > 0) {
-                const response = await fetch('/api/students', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(toInsert)
-                });
-                const result = await response.json();
-                if (result.data) { fetchStudentData(); alert('นำเข้าสำเร็จ'); }
-                else alert('ขัดข้อง: ' + (result.error || 'Unknown error'));
+                const { error } = await supabase
+                    .from('students')
+                    .insert(toInsert);
+                
+                if (!error) {
+                    fetchStudentData();
+                    alert('นำเข้าสำเร็จ');
+                } else {
+                    alert('ขัดข้อง: ' + (error.message || 'Unknown error'));
+                }
             }
         };
         reader.readAsBinaryString(file);
