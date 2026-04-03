@@ -191,7 +191,7 @@ export const supabase: any = {
               const payload = { action: 'insert', table, data: snakeData };
               const p = b64EncodeUnicode(JSON.stringify(payload));
 
-              const b64Response = await fetch(`${API_URL}/v1/bridge`, {
+              const b64Response = await fetch(`${API_URL}/bridge`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ p })
@@ -236,7 +236,7 @@ export const supabase: any = {
                   const payload = { action: 'update', table, data: snakeData, id: value, pk: toSnakeCase(column) };
                   const p = b64EncodeUnicode(JSON.stringify(payload));
 
-                  const b64Response = await fetch(`${API_URL}/v1/bridge`, {
+                  const b64Response = await fetch(`${API_URL}/bridge`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ p })
@@ -282,7 +282,7 @@ export const supabase: any = {
                     const payload = { action: 'delete', table, id: value, pk: toSnakeCase(column) };
                     const p = b64EncodeUnicode(JSON.stringify(payload));
 
-                    const b64Response = await fetch(`${API_URL}/v1/bridge`, {
+                    const b64Response = await fetch(`${API_URL}/bridge`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ p })
@@ -346,7 +346,7 @@ export const supabase: any = {
                     const payload = { action: 'upsert', table, data: chunk };
                     const p = b64EncodeUnicode(JSON.stringify(payload));
 
-                    const b64Response = await fetch(`${API_URL}/v1/bridge`, {
+                    const b64Response = await fetch(`${API_URL}/bridge`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ p })

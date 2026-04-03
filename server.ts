@@ -131,14 +131,14 @@ app.use('/api', (req, res, next) => {
 });
 
 // DATA SYNC (Base64 fallback for strict firewalls)
-app.post('/api/v1/bridge', async (req, res) => {
+app.post('/api/bridge', async (req, res) => {
   try {
     if (!req.body.p) {
       return res.status(400).json({ error: 'Missing payload (p)' });
     }
     const decodedString = Buffer.from(req.body.p, 'base64').toString('utf-8');
     const { action, table, data, id, pk = 'id', onConflict } = JSON.parse(decodedString);
-    console.log('Bridge Request:', { action, table, data, id, pk, onConflict });
+    console.log('[Bridge API] Request:', { action, table, data, id, pk, onConflict });
     
     if (action === 'upsert') {
       const items = Array.isArray(data) ? data : [data];
@@ -202,14 +202,15 @@ async function performBulkUpsert(table: string, items: any[]) {
 
       const values = Object.values(processedData).map(v => (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v);
       const placeholders = keys.map(() => '?').join(', ');
-      const updateClause = keys.filter(k => k !== 'id').map(k => `?? = VALUES(??)`).join(', ');
-      const updateParams = keys.filter(k => k !== 'id').flatMap(k => [k, k]);
+      
+      // Use manual escaping for column names in ON DUPLICATE KEY UPDATE to be safer with mysql2
+      const updateClause = keys.filter(k => k !== 'id').map(k => `\`${k}\` = VALUES(\`${k}\`)`).join(', ');
 
-      let sql = `INSERT INTO ?? (??) VALUES (${placeholders})`;
-      let params = [table, keys, ...values];
+      let sql = `INSERT INTO \`${table}\` (\`${keys.join('`, `')}\`) VALUES (${placeholders})`;
+      let params = [...values];
+      
       if (updateClause.length > 0) {
         sql += ` ON DUPLICATE KEY UPDATE ${updateClause}`;
-        params.push(...updateParams);
       }
 
       const [result]: any = await connection.query(sql, params);
@@ -219,6 +220,7 @@ async function performBulkUpsert(table: string, items: any[]) {
     return results;
   } catch (err) {
     await connection.rollback();
+    console.error(`[BulkUpsert Error] Table: ${table}`, err);
     throw err;
   } finally {
     connection.release();
