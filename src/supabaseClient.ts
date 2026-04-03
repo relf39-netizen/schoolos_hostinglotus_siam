@@ -187,22 +187,38 @@ export const supabase: any = {
               }
               return { data: toCamelCase(result.data), error: null };
             } catch (e) {
-              console.warn(`Insert JSON failed for ${table}, retrying with Bridge...`);
-              const payload = { action: 'insert', table, data: snakeData };
-              const p = b64EncodeUnicode(JSON.stringify(payload));
-
-              const b64Response = await fetch(`${API_URL}/data-sync`, {
+              console.warn(`Insert JSON failed for ${table}, retrying with POST insert fallback...`);
+              const postResponse = await fetch(`${API_URL}/${table}/insert`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `d=${encodeURIComponent(p)}`
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(snakeData)
               });
-
-              const b64Text = await b64Response.text();
+              const postText = await postResponse.text();
               try {
-                const b64Result = JSON.parse(b64Text);
-                return b64Response.ok ? { data: b64Result.data, error: null } : { data: null, error: { message: b64Result.error } };
-              } catch (b64E) {
-                return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+                const postResult = JSON.parse(postText);
+                if (postResponse.ok) {
+                  return { data: toCamelCase(postResult.data), error: null };
+                } else {
+                  throw new Error(postResult.error || "POST Insert fallback failed");
+                }
+              } catch (postE) {
+                console.warn(`POST insert fallback failed for ${table}, retrying with Bridge...`);
+                const payload = { action: 'insert', table, data: snakeData };
+                const p = b64EncodeUnicode(JSON.stringify(payload));
+
+                const b64Response = await fetch(`${API_URL}/data-sync`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: `d=${encodeURIComponent(p)}`
+                });
+
+                const b64Text = await b64Response.text();
+                try {
+                  const b64Result = JSON.parse(b64Text);
+                  return b64Response.ok ? { data: b64Result.data, error: null } : { data: null, error: { message: b64Result.error } };
+                } catch (b64E) {
+                  return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+                }
               }
             }
           } catch (error: any) {
@@ -232,22 +248,38 @@ export const supabase: any = {
                   }
                   return { data: toCamelCase(result.data), error: null };
                 } catch (e) {
-                  console.warn(`Update JSON failed for ${table}, retrying with Bridge...`);
-                  const payload = { action: 'update', table, data: snakeData, id: value, pk: toSnakeCase(column) };
-                  const p = b64EncodeUnicode(JSON.stringify(payload));
-
-                  const b64Response = await fetch(`${API_URL}/data-sync`, {
+                  console.warn(`Update JSON failed for ${table}, retrying with POST update fallback...`);
+                  const postResponse = await fetch(`${API_URL}/${table}/${value}/update`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `d=${encodeURIComponent(p)}`
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(snakeData)
                   });
-
-                  const b64Text = await b64Response.text();
+                  const postText = await postResponse.text();
                   try {
-                    const b64Result = JSON.parse(b64Text);
-                    return b64Response.ok ? { data: b64Result.data, error: null } : { data: null, error: { message: b64Result.error } };
-                  } catch (b64E) {
-                    return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+                    const postResult = JSON.parse(postText);
+                    if (postResponse.ok) {
+                      return { data: toCamelCase(postResult.data), error: null };
+                    } else {
+                      throw new Error(postResult.error || "POST Update fallback failed");
+                    }
+                  } catch (postE) {
+                    console.warn(`POST update fallback failed for ${table}, retrying with Bridge...`);
+                    const payload = { action: 'update', table, data: snakeData, id: value, pk: toSnakeCase(column) };
+                    const p = b64EncodeUnicode(JSON.stringify(payload));
+
+                    const b64Response = await fetch(`${API_URL}/data-sync`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                      body: `d=${encodeURIComponent(p)}`
+                    });
+
+                    const b64Text = await b64Response.text();
+                    try {
+                      const b64Result = JSON.parse(b64Text);
+                      return b64Response.ok ? { data: b64Result.data, error: null } : { data: null, error: { message: b64Result.error } };
+                    } catch (b64E) {
+                      return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+                    }
                   }
                 }
               } catch (error: any) {
@@ -278,22 +310,36 @@ export const supabase: any = {
                     }
                     resolve({ data: true, error: null });
                   } catch (e) {
-                    console.warn(`Delete JSON failed for ${table}, retrying with Bridge...`);
-                    const payload = { action: 'delete', table, id: value, pk: toSnakeCase(column) };
-                    const p = b64EncodeUnicode(JSON.stringify(payload));
-
-                    const b64Response = await fetch(`${API_URL}/data-sync`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                      body: `d=${encodeURIComponent(p)}`
+                    console.warn(`Delete JSON failed for ${table}, retrying with POST delete fallback...`);
+                    const postResponse = await fetch(`${API_URL}/${table}/${value}/delete`, {
+                      method: 'POST'
                     });
-
-                    const b64Text = await b64Response.text();
+                    const postText = await postResponse.text();
                     try {
-                      const b64Result = JSON.parse(b64Text);
-                      resolve(b64Response.ok ? { data: true, error: null } : { data: null, error: { message: b64Result.error } });
-                    } catch (b64E) {
-                      resolve({ data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } });
+                      const postResult = JSON.parse(postText);
+                      if (postResponse.ok) {
+                        resolve({ data: true, error: null });
+                      } else {
+                        throw new Error(postResult.error || "POST Delete fallback failed");
+                      }
+                    } catch (postE) {
+                      console.warn(`POST delete fallback failed for ${table}, retrying with Bridge...`);
+                      const payload = { action: 'delete', table, id: value, pk: toSnakeCase(column) };
+                      const p = b64EncodeUnicode(JSON.stringify(payload));
+
+                      const b64Response = await fetch(`${API_URL}/data-sync`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `d=${encodeURIComponent(p)}`
+                      });
+
+                      const b64Text = await b64Response.text();
+                      try {
+                        const b64Result = JSON.parse(b64Text);
+                        resolve(b64Response.ok ? { data: true, error: null } : { data: null, error: { message: b64Result.error } });
+                      } catch (b64E) {
+                        resolve({ data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } });
+                      }
                     }
                   }
                 } catch (error: any) {
@@ -342,32 +388,50 @@ export const supabase: any = {
                       throw new Error(result.error || "Server rejected JSON");
                     }
                   } catch (e) {
-                    console.warn(`Upsert JSON failed for ${table}, retrying with Bridge...`);
-                    const payload = { action: 'upsert', table, data: chunk };
-                    const p = b64EncodeUnicode(JSON.stringify(payload));
-
-                    const b64Response = await fetch(`${API_URL}/data-sync`, {
+                    console.warn(`Upsert JSON failed for ${table}, retrying with POST upsert fallback...`);
+                    const postResponse = await fetch(`${API_URL}/${table}/upsert`, {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                      body: `d=${encodeURIComponent(p)}`
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(chunk)
                     });
-
-                    const b64Text = await b64Response.text();
+                    const postText = await postResponse.text();
                     try {
-                      const b64Result = JSON.parse(b64Text);
-                      if (b64Response.ok) {
-                        const b64ResultData = toCamelCase(b64Result.data);
-                        allResults.push(...(Array.isArray(b64ResultData) ? b64ResultData : [b64ResultData]));
+                      const postResult = JSON.parse(postText);
+                      if (postResponse.ok) {
+                        const postResultData = toCamelCase(postResult.data);
+                        allResults.push(...(Array.isArray(postResultData) ? postResultData : [postResultData]));
                         success = true;
                       } else {
-                        if (attempts >= maxAttempts) return { data: null, error: { message: b64Result.error || "Firewall blocked Bridge request" } };
+                        throw new Error(postResult.error || "POST Upsert fallback failed");
+                      }
+                    } catch (postE) {
+                      console.warn(`POST upsert fallback failed for ${table}, retrying with Bridge...`);
+                      const payload = { action: 'upsert', table, data: chunk };
+                      const p = b64EncodeUnicode(JSON.stringify(payload));
+
+                      const b64Response = await fetch(`${API_URL}/data-sync`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `d=${encodeURIComponent(p)}`
+                      });
+
+                      const b64Text = await b64Response.text();
+                      try {
+                        const b64Result = JSON.parse(b64Text);
+                        if (b64Response.ok) {
+                          const b64ResultData = toCamelCase(b64Result.data);
+                          allResults.push(...(Array.isArray(b64ResultData) ? b64ResultData : [b64ResultData]));
+                          success = true;
+                        } else {
+                          if (attempts >= maxAttempts) return { data: null, error: { message: b64Result.error || "Firewall blocked Bridge request" } };
+                          await delay(1000 * attempts);
+                        }
+                      } catch (b64E) {
+                        if (attempts >= maxAttempts) {
+                          return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+                        }
                         await delay(1000 * attempts);
                       }
-                    } catch (b64E) {
-                      if (attempts >= maxAttempts) {
-                        return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
-                      }
-                      await delay(1000 * attempts);
                     }
                   }
                 } catch (fetchError: any) {

@@ -132,6 +132,7 @@ app.use('/api', (req, res, next) => {
 
 // DATA SYNC (Base64 fallback for strict firewalls)
 app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge'], async (req, res) => {
+  console.log(`[Data Sync API] Incoming request from ${req.ip}`);
   try {
     // Support multiple parameter names to bypass specific WAF filters
     const payload = req.body.d || req.body.p || req.body.data || req.body.payload;
@@ -545,6 +546,72 @@ app.post('/api/:table', async (req, res) => {
     res.json({ data: Array.isArray(req.body) ? results : results[0] });
   } catch (error: any) {
     console.error(`[API ERROR] POST failed for ${table}:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Normal POST for UPSERT (Fallback for WAF)
+app.post('/api/:table/upsert', async (req, res) => {
+  try {
+    const { table } = req.params;
+    const items = Array.isArray(req.body) ? req.body : [req.body];
+    
+    const results = await performBulkUpsert(table, items);
+    res.json({ success: true, data: results });
+  } catch (error: any) {
+    console.error(`[API ERROR] UPSERT failed for ${table}:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Normal POST for UPDATE (Fallback for WAF)
+app.post('/api/:table/:id/update', async (req, res) => {
+  try {
+    const { table, id } = req.params;
+    const data = req.body;
+    
+    // Handle JSON fields
+    const jsonFieldsMap: any = {
+      profiles: ['roles', 'assigned_classes'],
+      school_configs: ['internal_departments', 'external_agencies'],
+      academic_enrollments: ['levels'],
+      academic_test_scores: ['results'],
+      documents: ['target_teachers', 'acknowledged_by', 'attachments'],
+      attendance: ['coordinate']
+    };
+    const fieldsToSerialize = jsonFieldsMap[table] || [];
+    const processedData = { ...data };
+    fieldsToSerialize.forEach((field: string) => {
+      if (processedData[field] && typeof processedData[field] !== 'string') {
+        processedData[field] = JSON.stringify(processedData[field]);
+      }
+    });
+
+    const pkMap: any = {
+      school_configs: 'school_id',
+      schools: 'id',
+      profiles: 'id'
+    };
+    const pk = pkMap[table] || 'id';
+
+    await pool.query(`UPDATE ?? SET ? WHERE ?? = ?`, [table, processedData, pk, id]);
+    res.json({ success: true, data: { [pk]: id, ...data } });
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Normal POST for INSERT (Fallback for WAF)
+app.post('/api/:table/insert', async (req, res) => {
+  try {
+    const { table } = req.params;
+    const data = req.body;
+    
+    const [result]: any = await pool.query(`INSERT INTO ?? SET ?`, [table, data]);
+    res.json({ success: true, id: result.insertId || data.id });
+  } catch (error: any) {
+    console.error(`[API ERROR] INSERT failed for ${table}:`, error);
     res.status(500).json({ error: error.message });
   }
 });
