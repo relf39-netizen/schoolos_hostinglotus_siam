@@ -184,24 +184,32 @@ class MutationQueryBuilder {
   async then(resolve: any, reject: any) {
     try {
       const snakeData = this.data ? toSnakeCase(this.data) : undefined;
-      const snakeFilters = toSnakeCase(this.filters);
       
+      // Convert boolean filters to 1/0 for MySQL compatibility
+      const processedFilters: Record<string, any> = {};
+      Object.entries(this.filters).forEach(([key, value]) => {
+        const snakeKey = key.replace(/[A-Z]/g, $1 => `_${$1.toLowerCase()}`);
+        if (value === true) processedFilters[snakeKey] = '1';
+        else if (value === false) processedFilters[snakeKey] = '0';
+        else processedFilters[snakeKey] = value;
+      });
+
       const payload: any = { 
         action: this.action, 
         table: this.table, 
-        filters: snakeFilters 
+        filters: processedFilters 
       };
       if (snakeData) payload.data = snakeData;
 
-      const filterKeys = Object.keys(this.filters);
+      const filterKeys = Object.keys(processedFilters);
       if (filterKeys.length === 1 && (filterKeys[0] === 'id' || filterKeys[0] === 'uuid')) {
-        payload.id = this.filters[filterKeys[0]];
-        payload.pk = toSnakeCase(filterKeys[0]);
+        payload.id = processedFilters[filterKeys[0]];
+        payload.pk = filterKeys[0];
         delete payload.filters;
       }
 
       const p = b64EncodeUnicode(JSON.stringify(payload));
-      const response = await fetch(`${window.location.origin}/public/v1/bridge`, {
+      const response = await fetch(`${window.location.origin}/api/v1/bridge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ p })
@@ -252,7 +260,7 @@ export const supabase: any = {
             const payload = { action: 'insert', table, data: snakeData };
             const p = b64EncodeUnicode(JSON.stringify(payload));
 
-            const b64Response = await fetch(`${window.location.origin}/public/v1/bridge`, {
+            const b64Response = await fetch(`${window.location.origin}/api/v1/bridge`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ p })
@@ -293,7 +301,7 @@ export const supabase: any = {
             const payload = { action: 'upsert', table, data: snakeData };
             const p = b64EncodeUnicode(JSON.stringify(payload));
 
-            const b64Response = await fetch(`${window.location.origin}/public/v1/bridge`, {
+            const b64Response = await fetch(`${window.location.origin}/api/v1/bridge`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ p })
