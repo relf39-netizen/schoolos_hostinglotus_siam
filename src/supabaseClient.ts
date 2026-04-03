@@ -265,6 +265,7 @@ export const supabase: any = {
             return {
               async then(resolve: any) {
                 try {
+                  console.log(`[Supabase Mock] DELETE ${table}/${value}`, { column });
                   const response = await fetch(`${API_URL}/${table}/${value}`, {
                     method: 'DELETE'
                   });
@@ -308,6 +309,7 @@ export const supabase: any = {
           try {
             const snakeData = toSnakeCase(data);
             const items = Array.isArray(snakeData) ? snakeData : [snakeData];
+            console.log(`[Supabase Mock] UPSERT ${table}`, { itemsCount: items.length });
             const chunkSize = 3; 
             const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
