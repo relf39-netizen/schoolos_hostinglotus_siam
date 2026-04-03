@@ -156,7 +156,7 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge'], async (req, res
       return res.status(400).json({ error: 'Invalid JSON in payload' });
     }
 
-    const { action, table, data, id, pk = 'id', onConflict } = parsed;
+    const { action, table, data, id, pk = 'id', onConflict, filters } = parsed;
     console.log(`[Data Sync API] ${action.toUpperCase()} on ${table}`, { id, pk });
     
     if (action === 'upsert') {

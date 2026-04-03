@@ -201,10 +201,10 @@ class MutationQueryBuilder {
       }
 
       const p = b64EncodeUnicode(JSON.stringify(payload));
-      const response = await fetch(`${API_URL}/data-sync`, {
+      const response = await fetch(`${API_URL}/api/bridge`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `d=${encodeURIComponent(p)}`
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p })
       });
 
       const text = await response.text();
@@ -216,7 +216,23 @@ class MutationQueryBuilder {
           resolve({ data: null, error: { message: result.error || "Bridge mutation failed" } });
         }
       } catch (e) {
-        resolve({ data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${this.table} \nSnippet: ${text.substring(0, 100)}...` } });
+        // Fallback to form-urlencoded and /api/data-sync if JSON/bridge fails
+        try {
+          const fbResponse = await fetch(`${API_URL}/api/data-sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `d=${encodeURIComponent(p)}`
+          });
+          const fbText = await fbResponse.text();
+          const fbResult = JSON.parse(fbText);
+          if (fbResponse.ok) {
+            resolve({ data: fbResult.data || true, error: null });
+          } else {
+            throw new Error(fbResult.error);
+          }
+        } catch (fbE) {
+          resolve({ data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${this.table} \nSnippet: ${text.substring(0, 100)}...` } });
+        }
       }
     } catch (error: any) {
       console.error(`MutationQueryBuilder Error (${this.table}):`, error);
@@ -236,10 +252,10 @@ export const supabase: any = {
             const payload = { action: 'insert', table, data: snakeData };
             const p = b64EncodeUnicode(JSON.stringify(payload));
 
-            const b64Response = await fetch(`${API_URL}/data-sync`, {
+            const b64Response = await fetch(`${API_URL}/api/bridge`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: `d=${encodeURIComponent(p)}`
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ p })
             });
 
             const b64Text = await b64Response.text();
@@ -247,7 +263,19 @@ export const supabase: any = {
               const b64Result = JSON.parse(b64Text);
               return b64Response.ok ? { data: toCamelCase(b64Result.data), error: null } : { data: null, error: { message: b64Result.error } };
             } catch (b64E) {
-              return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+              // Fallback
+              const fbResponse = await fetch(`${API_URL}/api/data-sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `d=${encodeURIComponent(p)}`
+              });
+              const fbText = await fbResponse.text();
+              try {
+                const fbResult = JSON.parse(fbText);
+                return fbResponse.ok ? { data: toCamelCase(fbResult.data), error: null } : { data: null, error: { message: fbResult.error } };
+              } catch (e2) {
+                return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+              }
             }
           } catch (error: any) {
             return { data: null, error: { message: error.message } };
@@ -265,10 +293,10 @@ export const supabase: any = {
             const payload = { action: 'upsert', table, data: snakeData };
             const p = b64EncodeUnicode(JSON.stringify(payload));
 
-            const b64Response = await fetch(`${API_URL}/data-sync`, {
+            const b64Response = await fetch(`${API_URL}/api/bridge`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: `d=${encodeURIComponent(p)}`
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ p })
             });
 
             const b64Text = await b64Response.text();
@@ -276,7 +304,19 @@ export const supabase: any = {
               const b64Result = JSON.parse(b64Text);
               return b64Response.ok ? { data: toCamelCase(b64Result.data), error: null } : { data: null, error: { message: b64Result.error } };
             } catch (b64E) {
-              return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+              // Fallback
+              const fbResponse = await fetch(`${API_URL}/api/data-sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `d=${encodeURIComponent(p)}`
+              });
+              const fbText = await fbResponse.text();
+              try {
+                const fbResult = JSON.parse(fbText);
+                return fbResponse.ok ? { data: toCamelCase(fbResult.data), error: null } : { data: null, error: { message: fbResult.error } };
+              } catch (e2) {
+                return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+              }
             }
           } catch (error: any) {
             return { data: null, error: { message: error.message } };
