@@ -166,8 +166,16 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge'], async (req, res
     }
 
     if (action === 'delete') {
-      if (!id) return res.status(400).json({ error: 'Missing ID for delete' });
-      await pool.query(`DELETE FROM ?? WHERE ?? = ?`, [table, pk, id]);
+      if (id) {
+        await pool.query(`DELETE FROM ?? WHERE ?? = ?`, [table, pk, id]);
+      } else if (filters) {
+        const whereClauses = Object.keys(filters).map(k => `?? = ?`);
+        const whereParams = Object.entries(filters).flatMap(([k, v]) => [k, v]);
+        const sql = `DELETE FROM ?? WHERE ${whereClauses.join(' AND ')}`;
+        await pool.query(sql, [table, ...whereParams]);
+      } else {
+        return res.status(400).json({ error: 'Missing ID or filters for delete' });
+      }
       return res.json({ success: true });
     }
 
@@ -177,8 +185,16 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge'], async (req, res
     }
 
     if (action === 'update') {
-      if (!id) return res.status(400).json({ error: 'Missing ID for update' });
-      await pool.query(`UPDATE ?? SET ? WHERE ?? = ?`, [table, data, pk, id]);
+      if (id) {
+        await pool.query(`UPDATE ?? SET ? WHERE ?? = ?`, [table, data, pk, id]);
+      } else if (filters) {
+        const whereClauses = Object.keys(filters).map(k => `?? = ?`);
+        const whereParams = Object.entries(filters).flatMap(([k, v]) => [k, v]);
+        const sql = `UPDATE ?? SET ? WHERE ${whereClauses.join(' AND ')}`;
+        await pool.query(sql, [table, data, ...whereParams]);
+      } else {
+        return res.status(400).json({ error: 'Missing ID or filters for update' });
+      }
       return res.json({ success: true });
     }
 

@@ -164,6 +164,67 @@ function b64EncodeUnicode(str: string) {
   }));
 }
 
+class MutationQueryBuilder {
+  private table: string;
+  private action: 'update' | 'delete';
+  private data?: any;
+  private filters: Record<string, any> = {};
+
+  constructor(table: string, action: 'update' | 'delete', data?: any) {
+    this.table = table;
+    this.action = action;
+    this.data = data;
+  }
+
+  eq(column: string, value: any) {
+    this.filters[column] = value;
+    return this;
+  }
+
+  async then(resolve: any, reject: any) {
+    try {
+      const snakeData = this.data ? toSnakeCase(this.data) : undefined;
+      const snakeFilters = toSnakeCase(this.filters);
+      
+      const payload: any = { 
+        action: this.action, 
+        table: this.table, 
+        filters: snakeFilters 
+      };
+      if (snakeData) payload.data = snakeData;
+
+      const filterKeys = Object.keys(this.filters);
+      if (filterKeys.length === 1 && (filterKeys[0] === 'id' || filterKeys[0] === 'uuid')) {
+        payload.id = this.filters[filterKeys[0]];
+        payload.pk = toSnakeCase(filterKeys[0]);
+        delete payload.filters;
+      }
+
+      const p = b64EncodeUnicode(JSON.stringify(payload));
+      const response = await fetch(`${API_URL}/data-sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `d=${encodeURIComponent(p)}`
+      });
+
+      const text = await response.text();
+      try {
+        const result = JSON.parse(text);
+        if (response.ok) {
+          resolve({ data: result.data || true, error: null });
+        } else {
+          resolve({ data: null, error: { message: result.error || "Bridge mutation failed" } });
+        }
+      } catch (e) {
+        resolve({ data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${this.table} \nSnippet: ${text.substring(0, 100)}...` } });
+      }
+    } catch (error: any) {
+      console.error(`MutationQueryBuilder Error (${this.table}):`, error);
+      resolve({ data: null, error: { message: error.message } });
+    }
+  }
+}
+
 export const supabase: any = {
   from: (table: string) => {
     return {
@@ -172,54 +233,21 @@ export const supabase: any = {
         const execute = async () => {
           try {
             const snakeData = toSnakeCase(data);
-            const response = await fetch(`${API_URL}/${table}`, {
+            const payload = { action: 'insert', table, data: snakeData };
+            const p = b64EncodeUnicode(JSON.stringify(payload));
+
+            const b64Response = await fetch(`${API_URL}/data-sync`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(snakeData)
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: `d=${encodeURIComponent(p)}`
             });
-            
-            const text = await response.text();
-            let result;
+
+            const b64Text = await b64Response.text();
             try {
-              result = JSON.parse(text);
-              if (!response.ok) {
-                throw new Error(result.error || "JSON Insert failed");
-              }
-              return { data: toCamelCase(result.data), error: null };
-            } catch (e) {
-              console.warn(`Insert JSON failed for ${table}, retrying with POST insert fallback...`);
-              const postResponse = await fetch(`${API_URL}/${table}/insert`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(snakeData)
-              });
-              const postText = await postResponse.text();
-              try {
-                const postResult = JSON.parse(postText);
-                if (postResponse.ok) {
-                  return { data: toCamelCase(postResult.data), error: null };
-                } else {
-                  throw new Error(postResult.error || "POST Insert fallback failed");
-                }
-              } catch (postE) {
-                console.warn(`POST insert fallback failed for ${table}, retrying with Bridge...`);
-                const payload = { action: 'insert', table, data: snakeData };
-                const p = b64EncodeUnicode(JSON.stringify(payload));
-
-                const b64Response = await fetch(`${API_URL}/data-sync`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                  body: `d=${encodeURIComponent(p)}`
-                });
-
-                const b64Text = await b64Response.text();
-                try {
-                  const b64Result = JSON.parse(b64Text);
-                  return b64Response.ok ? { data: b64Result.data, error: null } : { data: null, error: { message: b64Result.error } };
-                } catch (b64E) {
-                  return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
-                }
-              }
+              const b64Result = JSON.parse(b64Text);
+              return b64Response.ok ? { data: toCamelCase(b64Result.data), error: null } : { data: null, error: { message: b64Result.error } };
+            } catch (b64E) {
+              return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
             }
           } catch (error: any) {
             return { data: null, error: { message: error.message } };
@@ -228,219 +256,28 @@ export const supabase: any = {
 
         return new MutationBuilder(execute);
       },
-      update: (data: any) => {
-        return {
-          eq: (column: string, value: any) => {
-            const execute = async () => {
-              try {
-                const snakeData = toSnakeCase(data);
-                const response = await fetch(`${API_URL}/${table}/${value}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(snakeData)
-                });
-                
-                const text = await response.text();
-                try {
-                  const result = JSON.parse(text);
-                  if (!response.ok) {
-                    throw new Error(result.error || "JSON Update failed");
-                  }
-                  return { data: toCamelCase(result.data), error: null };
-                } catch (e) {
-                  console.warn(`Update JSON failed for ${table}, retrying with POST update fallback...`);
-                  const postResponse = await fetch(`${API_URL}/${table}/${value}/update`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(snakeData)
-                  });
-                  const postText = await postResponse.text();
-                  try {
-                    const postResult = JSON.parse(postText);
-                    if (postResponse.ok) {
-                      return { data: toCamelCase(postResult.data), error: null };
-                    } else {
-                      throw new Error(postResult.error || "POST Update fallback failed");
-                    }
-                  } catch (postE) {
-                    console.warn(`POST update fallback failed for ${table}, retrying with Bridge...`);
-                    const payload = { action: 'update', table, data: snakeData, id: value, pk: toSnakeCase(column) };
-                    const p = b64EncodeUnicode(JSON.stringify(payload));
-
-                    const b64Response = await fetch(`${API_URL}/data-sync`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                      body: `d=${encodeURIComponent(p)}`
-                    });
-
-                    const b64Text = await b64Response.text();
-                    try {
-                      const b64Result = JSON.parse(b64Text);
-                      return b64Response.ok ? { data: b64Result.data, error: null } : { data: null, error: { message: b64Result.error } };
-                    } catch (b64E) {
-                      return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
-                    }
-                  }
-                }
-              } catch (error: any) {
-                return { data: null, error: { message: error.message } };
-              }
-            };
-
-            return new MutationBuilder(execute);
-          }
-        };
-      },
-      delete: () => {
-        return {
-          eq: (column: string, value: any) => {
-            return {
-              async then(resolve: any) {
-                try {
-                  console.log(`[Supabase Mock] DELETE ${table}/${value}`, { column });
-                  const response = await fetch(`${API_URL}/${table}/${value}`, {
-                    method: 'DELETE'
-                  });
-                  
-                  const text = await response.text();
-                  try {
-                    const result = JSON.parse(text);
-                    if (!response.ok) {
-                      throw new Error(result.error || "JSON Delete failed");
-                    }
-                    resolve({ data: true, error: null });
-                  } catch (e) {
-                    console.warn(`Delete JSON failed for ${table}, retrying with POST delete fallback...`);
-                    const postResponse = await fetch(`${API_URL}/${table}/${value}/delete`, {
-                      method: 'POST'
-                    });
-                    const postText = await postResponse.text();
-                    try {
-                      const postResult = JSON.parse(postText);
-                      if (postResponse.ok) {
-                        resolve({ data: true, error: null });
-                      } else {
-                        throw new Error(postResult.error || "POST Delete fallback failed");
-                      }
-                    } catch (postE) {
-                      console.warn(`POST delete fallback failed for ${table}, retrying with Bridge...`);
-                      const payload = { action: 'delete', table, id: value, pk: toSnakeCase(column) };
-                      const p = b64EncodeUnicode(JSON.stringify(payload));
-
-                      const b64Response = await fetch(`${API_URL}/data-sync`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: `d=${encodeURIComponent(p)}`
-                      });
-
-                      const b64Text = await b64Response.text();
-                      try {
-                        const b64Result = JSON.parse(b64Text);
-                        resolve(b64Response.ok ? { data: true, error: null } : { data: null, error: { message: b64Result.error } });
-                      } catch (b64E) {
-                        resolve({ data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } });
-                      }
-                    }
-                  }
-                } catch (error: any) {
-                  resolve({ data: null, error: { message: error.message } });
-                }
-              }
-            };
-          }
-        };
-      },
-      upsert: (data: any) => {
+      update: (data: any) => new MutationQueryBuilder(table, 'update', data),
+      delete: () => new MutationQueryBuilder(table, 'delete'),
+  upsert: (data: any) => {
         const execute = async () => {
           try {
             const snakeData = toSnakeCase(data);
-            const items = Array.isArray(snakeData) ? snakeData : [snakeData];
-            console.log(`[Supabase Mock] UPSERT ${table}`, { itemsCount: items.length });
-            const chunkSize = 3; 
-            const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+            const payload = { action: 'upsert', table, data: snakeData };
+            const p = b64EncodeUnicode(JSON.stringify(payload));
 
-            const allResults = [];
-            for (let i = 0; i < items.length; i += chunkSize) {
-              const chunk = items.slice(i, i + chunkSize);
-              if (i > 0) await delay(500);
+            const b64Response = await fetch(`${API_URL}/data-sync`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: `d=${encodeURIComponent(p)}`
+            });
 
-              let success = false;
-              let attempts = 0;
-              const maxAttempts = 2;
-
-              while (!success && attempts < maxAttempts) {
-                attempts++;
-                try {
-                  const response = await fetch(`${API_URL}/${table}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(chunk)
-                  });
-
-                  const text = await response.text();
-                  try {
-                    const result = JSON.parse(text);
-                    if (response.ok) {
-                      const resultData = toCamelCase(result.data);
-                      allResults.push(...(Array.isArray(resultData) ? resultData : [resultData]));
-                      success = true;
-                    } else {
-                      throw new Error(result.error || "Server rejected JSON");
-                    }
-                  } catch (e) {
-                    console.warn(`Upsert JSON failed for ${table}, retrying with POST upsert fallback...`);
-                    const postResponse = await fetch(`${API_URL}/${table}/upsert`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(chunk)
-                    });
-                    const postText = await postResponse.text();
-                    try {
-                      const postResult = JSON.parse(postText);
-                      if (postResponse.ok) {
-                        const postResultData = toCamelCase(postResult.data);
-                        allResults.push(...(Array.isArray(postResultData) ? postResultData : [postResultData]));
-                        success = true;
-                      } else {
-                        throw new Error(postResult.error || "POST Upsert fallback failed");
-                      }
-                    } catch (postE) {
-                      console.warn(`POST upsert fallback failed for ${table}, retrying with Bridge...`);
-                      const payload = { action: 'upsert', table, data: chunk };
-                      const p = b64EncodeUnicode(JSON.stringify(payload));
-
-                      const b64Response = await fetch(`${API_URL}/data-sync`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: `d=${encodeURIComponent(p)}`
-                      });
-
-                      const b64Text = await b64Response.text();
-                      try {
-                        const b64Result = JSON.parse(b64Text);
-                        if (b64Response.ok) {
-                          const b64ResultData = toCamelCase(b64Result.data);
-                          allResults.push(...(Array.isArray(b64ResultData) ? b64ResultData : [b64ResultData]));
-                          success = true;
-                        } else {
-                          if (attempts >= maxAttempts) return { data: null, error: { message: b64Result.error || "Firewall blocked Bridge request" } };
-                          await delay(1000 * attempts);
-                        }
-                      } catch (b64E) {
-                        if (attempts >= maxAttempts) {
-                          return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
-                        }
-                        await delay(1000 * attempts);
-                      }
-                    }
-                  }
-                } catch (fetchError: any) {
-                  if (attempts >= maxAttempts) return { data: null, error: { message: `ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้: ${fetchError.message}` } };
-                  await delay(1000 * attempts);
-                }
-              }
+            const b64Text = await b64Response.text();
+            try {
+              const b64Result = JSON.parse(b64Text);
+              return b64Response.ok ? { data: toCamelCase(b64Result.data), error: null } : { data: null, error: { message: b64Result.error } };
+            } catch (b64E) {
+              return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
             }
-            return { data: allResults, error: null };
           } catch (error: any) {
             return { data: null, error: { message: error.message } };
           }
