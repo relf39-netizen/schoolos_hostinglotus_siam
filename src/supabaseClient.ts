@@ -201,7 +201,7 @@ class MutationQueryBuilder {
       }
 
       const p = b64EncodeUnicode(JSON.stringify(payload));
-      const response = await fetch(`${API_URL}/api/bridge`, {
+      const response = await fetch(`${window.location.origin}/public/v1/bridge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ p })
@@ -218,7 +218,7 @@ class MutationQueryBuilder {
       } catch (e) {
         // Fallback to form-urlencoded and /api/data-sync if JSON/bridge fails
         try {
-          const fbResponse = await fetch(`${API_URL}/api/data-sync`, {
+          const fbResponse = await fetch(`${window.location.origin}/api/data-sync`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: `d=${encodeURIComponent(p)}`
@@ -252,7 +252,7 @@ export const supabase: any = {
             const payload = { action: 'insert', table, data: snakeData };
             const p = b64EncodeUnicode(JSON.stringify(payload));
 
-            const b64Response = await fetch(`${API_URL}/api/bridge`, {
+            const b64Response = await fetch(`${window.location.origin}/public/v1/bridge`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ p })
@@ -264,7 +264,7 @@ export const supabase: any = {
               return b64Response.ok ? { data: toCamelCase(b64Result.data), error: null } : { data: null, error: { message: b64Result.error } };
             } catch (b64E) {
               // Fallback
-              const fbResponse = await fetch(`${API_URL}/api/data-sync`, {
+              const fbResponse = await fetch(`${window.location.origin}/api/data-sync`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: `d=${encodeURIComponent(p)}`
@@ -293,7 +293,7 @@ export const supabase: any = {
             const payload = { action: 'upsert', table, data: snakeData };
             const p = b64EncodeUnicode(JSON.stringify(payload));
 
-            const b64Response = await fetch(`${API_URL}/api/bridge`, {
+            const b64Response = await fetch(`${window.location.origin}/public/v1/bridge`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ p })
@@ -305,7 +305,7 @@ export const supabase: any = {
               return b64Response.ok ? { data: toCamelCase(b64Result.data), error: null } : { data: null, error: { message: b64Result.error } };
             } catch (b64E) {
               // Fallback
-              const fbResponse = await fetch(`${API_URL}/api/data-sync`, {
+              const fbResponse = await fetch(`${window.location.origin}/api/data-sync`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: `d=${encodeURIComponent(p)}`

@@ -131,7 +131,7 @@ app.use('/api', (req, res, next) => {
 });
 
 // DATA SYNC (Base64 fallback for strict firewalls)
-app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge'], async (req, res) => {
+app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/public/v1/bridge'], async (req, res) => {
   console.log(`[Data Sync API] Incoming request from ${req.ip}`);
   try {
     // Support multiple parameter names to bypass specific WAF filters
