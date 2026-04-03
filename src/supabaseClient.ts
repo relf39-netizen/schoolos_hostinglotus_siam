@@ -3,6 +3,38 @@
 // Use absolute path to ensure it works regardless of current URL
 const API_URL = window.location.origin + '/api';
 
+// Helper to convert snake_case to camelCase
+function toCamelCase(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(v => toCamelCase(v));
+  } else if (obj !== null && obj.constructor === Object) {
+    return Object.keys(obj).reduce(
+      (result, key) => ({
+        ...result,
+        [key.replace(/([-_][a-z])/gi, ($1) => $1.toUpperCase().replace('-', '').replace('_', ''))]: toCamelCase(obj[key]),
+      }),
+      {},
+    );
+  }
+  return obj;
+}
+
+// Helper to convert camelCase to snake_case
+function toSnakeCase(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(v => toSnakeCase(v));
+  } else if (obj !== null && obj.constructor === Object) {
+    return Object.keys(obj).reduce(
+      (result, key) => ({
+        ...result,
+        [key.replace(/[A-Z]/g, $1 => `_${$1.toLowerCase()}`)]: toSnakeCase(obj[key]),
+      }),
+      {},
+    );
+  }
+  return obj;
+}
+
 class QueryBuilder {
   private table: string;
   private filters: Record<string, any> = {};
@@ -38,8 +70,11 @@ class QueryBuilder {
         else processedFilters[key] = value;
       });
 
-      const queryParams = new URLSearchParams(processedFilters).toString();
-      const response = await fetch(`${API_URL}/${this.table}?${queryParams}`, {
+      const queryParams = new URLSearchParams(toSnakeCase(processedFilters)).toString();
+      const fullUrl = `${API_URL}/${this.table}?${queryParams}`;
+      console.log(`[Supabase Mock] GET ${fullUrl}`);
+      
+      const response = await fetch(fullUrl, {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -49,7 +84,8 @@ class QueryBuilder {
       if (response.ok) {
         try {
           const result = JSON.parse(text);
-          let data = result.data;
+          let data = toCamelCase(result.data);
+          console.log(`[Supabase Mock] Received ${data?.length || 0} rows from ${this.table}`);
           
           // Apply local filtering for date normalization if needed
           if (Array.isArray(data) && (this.filters.date || this.filters.school_id)) {
@@ -170,10 +206,11 @@ export const supabase: any = {
       insert: (data: any) => {
         const execute = async () => {
           try {
+            const snakeData = toSnakeCase(data);
             const response = await fetch(`${API_URL}/${table}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(data)
+              body: JSON.stringify(snakeData)
             });
             
             const text = await response.text();
@@ -184,10 +221,10 @@ export const supabase: any = {
                 // If JSON failed, try Base64 fallback (might be WAF blocking large JSON)
                 throw new Error(result.error || "JSON Insert failed");
               }
-              return { data: result.data, error: null };
+              return { data: toCamelCase(result.data), error: null };
             } catch (e) {
               console.warn(`Insert JSON failed for ${table}, retrying with Base64...`);
-              const jsonString = JSON.stringify(data);
+              const jsonString = JSON.stringify(snakeData);
               const encodedData = b64EncodeUnicode(jsonString);
 
               const b64Response = await fetch(`${API_URL}/v1/sync-base64/${table}`, {
@@ -216,10 +253,11 @@ export const supabase: any = {
           eq: (column: string, value: any) => {
             const execute = async () => {
               try {
+                const snakeData = toSnakeCase(data);
                 const response = await fetch(`${API_URL}/${table}/${value}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(data)
+                  body: JSON.stringify(snakeData)
                 });
                 
                 const text = await response.text();
@@ -228,11 +266,11 @@ export const supabase: any = {
                   if (!response.ok) {
                     throw new Error(result.error || "JSON Update failed");
                   }
-                  return { data: result.data, error: null };
+                  return { data: toCamelCase(result.data), error: null };
                 } catch (e) {
                   // Fallback to sync endpoint for updates if PATCH fails (WAF/Size)
                   console.warn(`Update JSON failed for ${table}, retrying with Base64 Sync...`);
-                  const payload = { ...data, [column]: value }; // Ensure ID is included for upsert-like behavior
+                  const payload = { ...snakeData, [toSnakeCase(column)]: value }; // Ensure ID is included for upsert-like behavior
                   const jsonString = JSON.stringify([payload]);
                   const encodedData = b64EncodeUnicode(jsonString);
 
@@ -299,7 +337,8 @@ export const supabase: any = {
       upsert: (data: any) => {
         const execute = async () => {
           try {
-            const items = Array.isArray(data) ? data : [data];
+            const snakeData = toSnakeCase(data);
+            const items = Array.isArray(snakeData) ? snakeData : [snakeData];
             const chunkSize = 3; 
             const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -326,7 +365,7 @@ export const supabase: any = {
                   try {
                     const result = JSON.parse(text);
                     if (response.ok) {
-                      const resultData = result.data;
+                      const resultData = toCamelCase(result.data);
                       allResults.push(...(Array.isArray(resultData) ? resultData : [resultData]));
                       success = true;
                     } else {
@@ -347,7 +386,7 @@ export const supabase: any = {
                     try {
                       const b64Result = JSON.parse(b64Text);
                       if (b64Response.ok) {
-                        const b64ResultData = b64Result.data;
+                        const b64ResultData = toCamelCase(b64Result.data);
                         allResults.push(...(Array.isArray(b64ResultData) ? b64ResultData : [b64ResultData]));
                         success = true;
                       } else {

@@ -63,21 +63,7 @@ const App: React.FC = () => {
             if (schoolsError) console.error("App: Schools Fetch Error:", schoolsError);
             if (schoolsData) {
                 console.log(`App: Fetched ${schoolsData.length} schools`);
-                setAllSchools(schoolsData.map((s: any) => ({
-                    id: s.id, 
-                    name: s.name, 
-                    district: s.district, 
-                    province: s.province,
-                    lat: s.lat, 
-                    lng: s.lng, 
-                    radius: s.radius, 
-                    lateTimeThreshold: s.late_time_threshold, 
-                    autoCheckOutEnabled: s.auto_check_out_enabled,
-                    autoCheckOutTime: s.auto_check_out_time,
-                    wfhModeEnabled: s.wfh_mode_enabled,
-                    logoBase64: s.logo_base_64, 
-                    isSuspended: s.is_suspended
-                })));
+                setAllSchools(schoolsData);
             }
 
             console.log("App: Fetching profiles...");
@@ -86,12 +72,9 @@ const App: React.FC = () => {
             if (profilesData) {
                 console.log(`App: Fetched ${profilesData.length} profiles`);
                 const mappedTeachers: Teacher[] = profilesData.map((p: any) => ({
-                    id: p.id, schoolId: p.school_id, name: p.name, password: p.password,
-                    position: p.position, roles: (p.roles as TeacherRole[]) || [], 
-                    signatureBase64: p.signature_base_64, telegramChatId: p.telegram_chat_id,
-                    isSuspended: p.is_suspended, isApproved: p.is_approved !== false,
-                    isActingDirector: ((p.roles as string[]) || [])?.includes('ACTING_DIRECTOR') || false,
-                    assignedClasses: p.assigned_classes || [],
+                    ...p,
+                    isApproved: p.isApproved !== false,
+                    isActingDirector: (p.roles || [])?.includes('ACTING_DIRECTOR') || false,
                     isFirstLogin: false
                 }));
                 setAllTeachers(mappedTeachers);
@@ -131,12 +114,9 @@ const App: React.FC = () => {
                     const { data } = await client.from('profiles').select('*');
                     if (data) {
                         const updatedList: Teacher[] = data.map((p: any) => ({
-                            id: p.id, schoolId: p.school_id, name: p.name, password: p.password,
-                            position: p.position, roles: (p.roles as TeacherRole[]) || [], 
-                            signatureBase64: p.signature_base_64, telegramChatId: p.telegram_chat_id,
-                            isSuspended: p.is_suspended, isApproved: p.is_approved !== false,
-                            isActingDirector: ((p.roles as string[]) || [])?.includes('ACTING_DIRECTOR') || false,
-                            assignedClasses: p.assigned_classes || []
+                            ...p,
+                            isApproved: p.isApproved !== false,
+                            isActingDirector: (p.roles || [])?.includes('ACTING_DIRECTOR') || false
                         } as any));
                         setAllTeachers(updatedList);
 

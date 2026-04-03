@@ -424,14 +424,8 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             
             let currentYear = '';
             if (yearsData) {
-                const mappedYears = yearsData.map((y: any) => ({
-                    id: y.id,
-                    schoolId: y.school_id,
-                    year: y.year,
-                    isCurrent: y.is_current
-                }));
-                setAcademicYears(mappedYears);
-                const current = mappedYears.find((y: any) => y.isCurrent);
+                setAcademicYears(yearsData);
+                const current = yearsData.find((y: any) => y.isCurrent);
                 if (current) {
                     currentYear = current.year;
                     setCurrentAcademicYear(currentYear);
@@ -455,23 +449,7 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             let mappedStudents: Student[] = [];
             if (studentsData) {
                 mappedStudents = studentsData.map((s: any) => ({
-                    id: s.id,
-                    schoolId: s.school_id,
-                    name: s.name,
-                    currentClass: s.current_class,
-                    academicYear: s.academic_year,
-                    isActive: s.is_active,
-                    isAlumni: s.is_alumni,
-                    graduationYear: s.graduation_year,
-                    batchNumber: s.batch_number,
-                    photoUrl: s.photo_url,
-                    address: s.address,
-                    phoneNumber: s.phone_number,
-                    fatherName: s.father_name,
-                    motherName: s.mother_name,
-                    guardianName: s.guardian_name,
-                    medicalConditions: s.medical_conditions,
-                    familyAnnualIncome: s.family_annual_income,
+                    ...s,
                     location: (s.lat && s.lng) ? { lat: s.lat, lng: s.lng } : undefined
                 }));
                 setStudents(mappedStudents);
@@ -485,12 +463,7 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             
             let mappedClasses: ClassRoom[] = [];
             if (classesData && classesData.length > 0) {
-                mappedClasses = classesData.map((c: any) => ({
-                    id: c.id,
-                    schoolId: c.school_id,
-                    name: c.name,
-                    academicYear: c.academic_year
-                }));
+                mappedClasses = classesData;
             } else if (mappedStudents.length > 0) {
                 // Derive classes from students if class_rooms table is empty
                 const uniqueClasses = [...new Set(mappedStudents.map((s: Student) => s.currentClass))].filter(Boolean);
@@ -539,14 +512,8 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             if (error) throw error;
             if (data) {
                 setHistoryAttendance(data.map((a: any) => ({
-                    id: a.id,
-                    schoolId: a.school_id,
-                    studentId: a.student_id,
-                    date: typeof a.date === 'string' ? a.date.split('T')[0] : formatToISODate(new Date(a.date)),
-                    status: a.status as StudentAttendanceStatus,
-                    academicYear: a.academic_year,
-                    createdBy: a.created_by,
-                    createdAt: a.created_at
+                    ...a,
+                    date: typeof a.date === 'string' ? a.date.split('T')[0] : formatToISODate(new Date(a.date))
                 })));
             }
         } catch (error) {
@@ -595,14 +562,8 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             
             if (data) {
                 const normalizedData = data.map((a: any) => ({
-                    id: a.id,
-                    schoolId: a.school_id,
-                    studentId: a.student_id,
-                    date: typeof a.date === 'string' ? a.date.split('T')[0] : formatToISODate(new Date(a.date)),
-                    status: a.status as StudentAttendanceStatus,
-                    academicYear: a.academic_year,
-                    createdBy: a.created_by,
-                    createdAt: a.created_at
+                    ...a,
+                    date: typeof a.date === 'string' ? a.date.split('T')[0] : formatToISODate(new Date(a.date))
                 }));
                 setAttendance(normalizedData);
             }
