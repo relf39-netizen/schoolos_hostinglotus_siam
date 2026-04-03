@@ -7,7 +7,7 @@ const API_URL = window.location.origin + '/api';
 function toCamelCase(obj: any): any {
   if (Array.isArray(obj)) {
     return obj.map(v => toCamelCase(v));
-  } else if (obj !== null && obj.constructor === Object) {
+  } else if (obj !== null && typeof obj === 'object') {
     return Object.keys(obj).reduce(
       (result, key) => ({
         ...result,
@@ -23,7 +23,7 @@ function toCamelCase(obj: any): any {
 function toSnakeCase(obj: any): any {
   if (Array.isArray(obj)) {
     return obj.map(v => toSnakeCase(v));
-  } else if (obj !== null && obj.constructor === Object) {
+  } else if (obj !== null && typeof obj === 'object') {
     return Object.keys(obj).reduce(
       (result, key) => ({
         ...result,
@@ -87,48 +87,13 @@ class QueryBuilder {
           let data = toCamelCase(result.data);
           console.log(`[Supabase Mock] Received ${data?.length || 0} rows from ${this.table}`);
           
-          // Apply local filtering for date normalization if needed
-          if (Array.isArray(data) && (this.filters.date || this.filters.school_id)) {
-            data = data.filter((item: any) => {
-              let match = true;
-              Object.entries(this.filters).forEach(([key, value]) => {
-                if (!match) return;
-                
-                let itemVal = item[key];
-                let filterVal = value;
-                
-                // Normalize for comparison
-                if (key === 'date' || key.endsWith('_at')) {
-                  const normalizeDate = (val: any) => {
-                    if (!val) return val;
-                    try {
-                      const d = new Date(val);
-                      if (!isNaN(d.getTime())) {
-                        return d.toISOString().split('T')[0];
-                      }
-                    } catch (e) {}
-                    if (typeof val === 'string') return val.split('T')[0];
-                    return val;
-                  };
-                  
-                  itemVal = normalizeDate(itemVal);
-                  filterVal = normalizeDate(filterVal);
-                }
-                
-                if (String(itemVal).toLowerCase() !== String(filterVal).toLowerCase()) {
-                  match = false;
-                }
-              });
-              return match;
-            });
-          }
-          
           resolve({ data, error: null });
         } catch (e) {
           const errorMsg = `Server returned HTML instead of JSON for table "${this.table}". \n\nResponse snippet: ${text.substring(0, 200)}...`;
           resolve({ data: null, error: { message: errorMsg } });
         }
-      } else {
+      }
+ else {
         try {
           const result = JSON.parse(text);
           resolve({ data: null, error: { message: result.error || "Unknown server error" } });

@@ -412,18 +412,25 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
     }, [filteredClassRooms]);
 
     const fetchInitialData = async () => {
-        if (!supabase) return;
+        if (!supabase || !currentUser?.schoolId) {
+            console.log("StudentAttendanceSystem: Missing supabase or schoolId", { supabase: !!supabase, schoolId: currentUser?.schoolId });
+            return;
+        }
         setIsLoading(true);
         try {
+            console.log("StudentAttendanceSystem: Starting fetchInitialData for schoolId:", currentUser.schoolId);
             // 1. Fetch Academic Years
-            const { data: yearsData } = await supabase
+            const { data: yearsData, error: yearsError } = await supabase
                 .from('academic_years')
                 .select('*')
                 .eq('school_id', currentUser.schoolId)
                 .order('year', { ascending: false });
             
+            if (yearsError) console.error("Error fetching academic years:", yearsError);
+
             let currentYear = '';
             if (yearsData) {
+                console.log("StudentAttendanceSystem: Fetched academic years:", yearsData.length);
                 setAcademicYears(yearsData);
                 const current = yearsData.find((y: any) => y.isCurrent);
                 if (current) {
@@ -433,18 +440,21 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             }
 
             // 2. Fetch Students first to derive classes if needed
-            console.log(`Fetching students for school_id: ${currentUser.schoolId}`);
+            console.log(`StudentAttendanceSystem: Fetching students for school_id: ${currentUser.schoolId}`);
             const { data: studentsData, error: studentsError } = await supabase
                 .from('students')
                 .select('*')
                 .eq('school_id', currentUser.schoolId);
             
             if (studentsError) {
-                console.error("Error fetching students:", studentsError);
+                console.error("StudentAttendanceSystem: Error fetching students:", studentsError);
                 throw new Error(`ไม่สามารถดึงข้อมูลนักเรียนได้: ${studentsError.message}`);
             }
 
-            console.log(`Fetched students:`, studentsData?.length || 0);
+            console.log(`StudentAttendanceSystem: Fetched students:`, studentsData?.length || 0);
+            if (studentsData && studentsData.length > 0) {
+                console.log("StudentAttendanceSystem: Sample student data (first row):", studentsData[0]);
+            }
             
             let mappedStudents: Student[] = [];
             if (studentsData) {
@@ -456,17 +466,23 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             }
 
             // 3. Fetch Classrooms
-            const { data: classesData } = await supabase
+            console.log("StudentAttendanceSystem: Fetching classrooms...");
+            const { data: classesData, error: classesError } = await supabase
                 .from('class_rooms')
                 .select('*')
                 .eq('school_id', currentUser.schoolId);
             
+            if (classesError) console.error("Error fetching classrooms:", classesError);
+
             let mappedClasses: ClassRoom[] = [];
             if (classesData && classesData.length > 0) {
+                console.log("StudentAttendanceSystem: Fetched classrooms:", classesData.length);
                 mappedClasses = classesData;
             } else if (mappedStudents.length > 0) {
                 // Derive classes from students if class_rooms table is empty
+                console.log("StudentAttendanceSystem: Deriving classes from students...");
                 const uniqueClasses = [...new Set(mappedStudents.map((s: Student) => s.currentClass))].filter(Boolean);
+                console.log("StudentAttendanceSystem: Unique classes derived:", uniqueClasses);
                 mappedClasses = uniqueClasses.map((className, index) => ({
                     id: `gen-${index}`,
                     schoolId: currentUser.schoolId,
@@ -476,23 +492,30 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
             }
             
             setClassRooms(mappedClasses);
+            console.log("StudentAttendanceSystem: Final mapped classes:", mappedClasses.length);
             
             // Auto-select class
             const filtered = (isAdmin || !currentUser.assignedClasses || currentUser.assignedClasses.length === 0)
                 ? mappedClasses 
                 : mappedClasses.filter(c => currentUser.assignedClasses?.includes(c.name));
 
+            console.log("StudentAttendanceSystem: Filtered classes for selection:", filtered.length);
             if (filtered.length > 0) {
+                console.log("StudentAttendanceSystem: Auto-selecting class:", filtered[0].name);
                 setSelectedClass(filtered[0].name);
             } else if (mappedClasses.length > 0) {
+                console.log("StudentAttendanceSystem: No filtered classes, selecting first mapped class:", mappedClasses[0].name);
                 setSelectedClass(mappedClasses[0].name);
             }
 
             // 4. Fetch Today's Attendance
-            fetchAttendance(formatToISODate(new Date()));
+            await fetchAttendance(formatToISODate(new Date()));
+            
+            // 5. Fetch History
+            await fetchHistory();
 
-        } catch (error) {
-            console.error('Error fetching initial attendance data:', error);
+        } catch (error: any) {
+            console.error('StudentAttendanceSystem: Error fetching initial attendance data:', error);
         } finally {
             setIsLoading(false);
         }

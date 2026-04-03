@@ -460,65 +460,43 @@ function setTelegramWebhook() {
     }, [currentSchool.id]);
 
     const fetchStudentData = async () => {
+        if (!supabase) return;
         setIsLoadingStudents(true);
         try {
             // Fetch Years
-            const yearsResponse = await fetch(`/api/academic_years?school_id=${currentSchool.id}`);
-            const yearsResult = await yearsResponse.json();
+            const { data: yearsData } = await supabase
+                .from('academic_years')
+                .select('*')
+                .eq('school_id', currentSchool.id)
+                .order('year', { ascending: false });
             
-            if (yearsResult.data) {
-                const mappedYears = yearsResult.data.map((y: any) => ({
-                    id: y.id,
-                    schoolId: y.school_id,
-                    year: y.year,
-                    isCurrent: y.is_current
-                }));
-                setAcademicYears(mappedYears);
-                const current = mappedYears.find((y: any) => y.isCurrent);
+            if (yearsData) {
+                setAcademicYears(yearsData);
+                const current = yearsData.find((y: any) => y.isCurrent);
                 if (current) setCurrentAcademicYear(current.year);
             }
 
             // Fetch Classes
-            const classesResponse = await fetch(`/api/class_rooms?school_id=${currentSchool.id}`);
-            const classesResult = await classesResponse.json();
+            const { data: classesData } = await supabase
+                .from('class_rooms')
+                .select('*')
+                .eq('school_id', currentSchool.id);
             
-            if (classesResult.data) {
-                setClassRooms(classesResult.data.map((c: any) => ({
-                    id: c.id,
-                    schoolId: c.school_id,
-                    name: c.name,
-                    academicYear: c.academic_year
-                })));
+            if (classesData) {
+                setClassRooms(classesData);
             }
 
-            // Fetch Students - Remove is_active=1 to show all imported students by default
-            const studentsResponse = await fetch(`/api/students?school_id=${currentSchool.id}`);
-            const studentsResult = await studentsResponse.json();
+            // Fetch Students
+            const { data: studentsData } = await supabase
+                .from('students')
+                .select('*')
+                .eq('school_id', currentSchool.id);
             
-            console.log("Fetched Students Data:", studentsResult.data);
-
-            if (studentsResult.data) {
-                const mapped = studentsResult.data.map((s: any) => ({
-                    id: s.id || 'N/A',
-                    schoolId: s.school_id,
-                    name: s.name || 'ไม่ระบุชื่อ',
-                    currentClass: s.current_class || 'ไม่ระบุชั้น',
-                    academicYear: s.academic_year,
-                    isActive: s.is_active,
-                    isAlumni: s.is_alumni,
-                    graduationYear: s.graduation_year,
-                    batchNumber: s.batch_number,
-                    photoUrl: s.photo_url,
-                    address: s.address,
-                    phoneNumber: s.phone_number,
-                    fatherName: s.father_name,
-                    motherName: s.mother_name,
-                    guardianName: s.guardian_name,
-                    medicalConditions: s.medical_conditions,
-                    familyAnnualIncome: s.family_annual_income,
+            if (studentsData) {
+                const mapped = studentsData.map((s: any) => ({
+                    ...s,
                     location: (s.lat && s.lng) ? { lat: s.lat, lng: s.lng } : undefined
                 }));
-                console.log("Mapped Students:", mapped);
                 setStudents(mapped);
             }
         } catch (err) {
@@ -624,16 +602,31 @@ function setTelegramWebhook() {
     const handleDeleteStudent = async (id: string) => {
         if (!confirm('ยืนยันลบนักเรียน?')) return;
         try {
-            const response = await fetch(`/api/students/${id}`, {
+            // Try DELETE first
+            let response = await fetch(`/api/students/${id}`, {
                 method: 'DELETE'
             });
-            const result = await response.json();
+            let result = await response.json();
+            
+            // Fallback to POST /delete if DELETE is blocked
+            if (!response.ok || !result.success) {
+                console.warn("DELETE failed, trying POST fallback...");
+                response = await fetch(`/api/students/${id}/delete`, {
+                    method: 'POST'
+                });
+                result = await response.json();
+            }
+
             if (result.success) {
                 fetchStudentData();
+                alert('ลบนักเรียนสำเร็จ');
             } else {
                 throw new Error(result.error || 'Failed to delete student');
             }
-        } catch (err) { console.error(err); }
+        } catch (err: any) { 
+            console.error(err);
+            alert('ไม่สามารถลบนักเรียนได้: ' + err.message);
+        }
     };
 
     const handlePromoteStudents = async () => {
