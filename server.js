@@ -20,6 +20,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // BigInt serialization support for JSON
 BigInt.prototype.toJSON = function() { return this.toString() };
@@ -82,6 +83,7 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
     const payload = req.body.d || req.body.p || req.body.data || req.body.payload;
     
     if (!payload) {
+      console.error('[Data Sync API] Missing payload. Body:', req.body);
       return res.status(400).json({ error: 'Missing payload' });
     }
 
