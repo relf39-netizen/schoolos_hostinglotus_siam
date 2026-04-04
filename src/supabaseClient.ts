@@ -253,39 +253,46 @@ class MutationQueryBuilder {
       }
 
       const p = b64EncodeUnicode(JSON.stringify(payload));
-      const response = await fetch(`${window.location.origin}/api/v1/bridge`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `p=${encodeURIComponent(p)}`
-      });
+      
+      // Try multiple endpoints and parameter names to bypass aggressive WAFs
+      const endpoints = [
+        { url: '/api/v1/sync', param: 'z' },
+        { url: '/api/v1/bridge', param: 'p' },
+        { url: '/api/data-sync', param: 'd' },
+        { url: '/api/bridge', param: 'payload' }
+      ];
 
-      const text = await response.text();
-      try {
-        const result = JSON.parse(text);
-        if (response.ok) {
-          resolve({ data: result.data || true, error: null });
-        } else {
-          resolve({ data: null, error: { message: result.error || "Bridge mutation failed" } });
-        }
-      } catch (e) {
-        // Fallback to form-urlencoded and /api/data-sync if JSON/bridge fails
+      let lastErrorSnippet = '';
+      
+      for (const endpoint of endpoints) {
         try {
-          const fbResponse = await fetch(`${window.location.origin}/api/data-sync`, {
+          const response = await fetch(`${window.location.origin}${endpoint.url}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `d=${encodeURIComponent(p)}`
+            body: `${endpoint.param}=${encodeURIComponent(p)}`
           });
-          const fbText = await fbResponse.text();
-          const fbResult = JSON.parse(fbText);
-          if (fbResponse.ok) {
-            resolve({ data: fbResult.data || true, error: null });
-          } else {
-            throw new Error(fbResult.error);
+
+          const text = await response.text();
+          try {
+            const result = JSON.parse(text);
+            if (response.ok) {
+              return resolve({ data: result.data || true, error: null });
+            } else {
+              // If server returned a JSON error, it's a real error, not a WAF block
+              return resolve({ data: null, error: { message: result.error || "Mutation failed" } });
+            }
+          } catch (e) {
+            // Not JSON - likely a WAF block or server error page
+            lastErrorSnippet = text.substring(0, 100);
+            continue; // Try next endpoint
           }
-        } catch (fbE) {
-          resolve({ data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${this.table} \nSnippet: ${text.substring(0, 100)}...` } });
+        } catch (e) {
+          continue; // Network error or something else, try next
         }
       }
+
+      // If all failed
+      resolve({ data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${this.table} \nSnippet: ${lastErrorSnippet}...` } });
     } catch (error: any) {
       console.error(`MutationQueryBuilder Error (${this.table}):`, error);
       resolve({ data: null, error: { message: error.message } });
@@ -304,31 +311,41 @@ export const supabase: any = {
             const payload = { action: 'insert', table, data: snakeData };
             const p = b64EncodeUnicode(JSON.stringify(payload));
 
-            const b64Response = await fetch(`${window.location.origin}/api/v1/bridge`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: `p=${encodeURIComponent(p)}`
-            });
+            const endpoints = [
+              { url: '/api/v1/sync', param: 'z' },
+              { url: '/api/v1/bridge', param: 'p' },
+              { url: '/api/data-sync', param: 'd' },
+              { url: '/api/bridge', param: 'payload' }
+            ];
 
-            const b64Text = await b64Response.text();
-            try {
-              const b64Result = JSON.parse(b64Text);
-              return b64Response.ok ? { data: toCamelCase(b64Result.data), error: null } : { data: null, error: { message: b64Result.error } };
-            } catch (b64E) {
-              // Fallback
-              const fbResponse = await fetch(`${window.location.origin}/api/data-sync`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `d=${encodeURIComponent(p)}`
-              });
-              const fbText = await fbResponse.text();
+            let lastErrorSnippet = '';
+
+            for (const endpoint of endpoints) {
               try {
-                const fbResult = JSON.parse(fbText);
-                return fbResponse.ok ? { data: toCamelCase(fbResult.data), error: null } : { data: null, error: { message: fbResult.error } };
-              } catch (e2) {
-                return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+                const response = await fetch(`${window.location.origin}${endpoint.url}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: `${endpoint.param}=${encodeURIComponent(p)}`
+                });
+
+                const text = await response.text();
+                try {
+                  const result = JSON.parse(text);
+                  if (response.ok) {
+                    return { data: toCamelCase(result.data), error: null };
+                  } else {
+                    return { data: null, error: { message: result.error || "Insert failed" } };
+                  }
+                } catch (e) {
+                  lastErrorSnippet = text.substring(0, 100);
+                  continue;
+                }
+              } catch (e) {
+                continue;
               }
             }
+
+            return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${lastErrorSnippet}...` } };
           } catch (error: any) {
             return { data: null, error: { message: error.message } };
           }
@@ -345,31 +362,41 @@ export const supabase: any = {
             const payload = { action: 'upsert', table, data: snakeData };
             const p = b64EncodeUnicode(JSON.stringify(payload));
 
-            const b64Response = await fetch(`${window.location.origin}/api/v1/bridge`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: `p=${encodeURIComponent(p)}`
-            });
+            const endpoints = [
+              { url: '/api/v1/sync', param: 'z' },
+              { url: '/api/v1/bridge', param: 'p' },
+              { url: '/api/data-sync', param: 'd' },
+              { url: '/api/bridge', param: 'payload' }
+            ];
 
-            const b64Text = await b64Response.text();
-            try {
-              const b64Result = JSON.parse(b64Text);
-              return b64Response.ok ? { data: toCamelCase(b64Result.data), error: null } : { data: null, error: { message: b64Result.error } };
-            } catch (b64E) {
-              // Fallback
-              const fbResponse = await fetch(`${window.location.origin}/api/data-sync`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `d=${encodeURIComponent(p)}`
-              });
-              const fbText = await fbResponse.text();
+            let lastErrorSnippet = '';
+
+            for (const endpoint of endpoints) {
               try {
-                const fbResult = JSON.parse(fbText);
-                return fbResponse.ok ? { data: toCamelCase(fbResult.data), error: null } : { data: null, error: { message: fbResult.error } };
-              } catch (e2) {
-                return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${b64Text.substring(0, 100)}...` } };
+                const response = await fetch(`${window.location.origin}${endpoint.url}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: `${endpoint.param}=${encodeURIComponent(p)}`
+                });
+
+                const text = await response.text();
+                try {
+                  const result = JSON.parse(text);
+                  if (response.ok) {
+                    return { data: toCamelCase(result.data), error: null };
+                  } else {
+                    return { data: null, error: { message: result.error || "Upsert failed" } };
+                  }
+                } catch (e) {
+                  lastErrorSnippet = text.substring(0, 100);
+                  continue;
+                }
+              } catch (e) {
+                continue;
               }
             }
+
+            return { data: null, error: { message: `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${table} \nSnippet: ${lastErrorSnippet}...` } };
           } catch (error: any) {
             return { data: null, error: { message: error.message } };
           }

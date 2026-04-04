@@ -130,12 +130,23 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+const jsonFieldsMap: any = {
+  profiles: ['roles', 'assigned_classes'],
+  school_configs: ['internal_departments', 'external_agencies'],
+  academic_enrollments: ['levels'],
+  academic_test_scores: ['results'],
+  documents: ['target_teachers', 'acknowledged_by', 'attachments'],
+  attendance: ['coordinate']
+};
+
+const uuidTables = ['class_rooms', 'students', 'student_savings', 'academic_years', 'student_attendance', 'student_health_records', 'director_events', 'finance_accounts', 'finance_transactions'];
+
 // DATA SYNC (Base64 fallback for strict firewalls)
-app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'], async (req, res) => {
+app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge', '/api/v1/sync'], async (req, res) => {
   console.log(`[Data Sync API] Incoming request from ${req.ip}`);
   try {
     // Support multiple parameter names to bypass specific WAF filters
-    const payload = req.body.d || req.body.p || req.body.data || req.body.payload;
+    const payload = req.body.d || req.body.p || req.body.z || req.body.data || req.body.payload;
     
     if (!payload) {
       console.error('[Data Sync API] Missing payload');
@@ -196,14 +207,6 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
       const [rows]: any = await pool.query(query, params);
       
       // Parse JSON fields for select
-      const jsonFieldsMap: any = {
-        profiles: ['roles', 'assigned_classes'],
-        school_configs: ['internal_departments', 'external_agencies'],
-        academic_enrollments: ['levels'],
-        academic_test_scores: ['results'],
-        documents: ['target_teachers', 'acknowledged_by', 'attachments'],
-        attendance: ['coordinate']
-      };
       const fieldsToParse = jsonFieldsMap[table] || [];
       const processedRows = rows.map((row: any) => parseJsonFields(row, fieldsToParse));
       
@@ -212,18 +215,11 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
 
     if (action === 'upsert') {
       const items = Array.isArray(data) ? data : [data];
-      const jsonFieldsMap: any = {
-        profiles: ['roles', 'assigned_classes'],
-        school_configs: ['internal_departments', 'external_agencies'],
-        academic_enrollments: ['levels'],
-        academic_test_scores: ['results'],
-        documents: ['target_teachers', 'acknowledged_by', 'attachments'],
-        attendance: ['coordinate']
-      };
       const fieldsToSerialize = jsonFieldsMap[table] || [];
 
       for (const item of items) {
         const processedData = { ...item };
+        if (uuidTables.includes(table) && !processedData.id) processedData.id = uuidv4();
         fieldsToSerialize.forEach(field => {
           if (processedData[field] && typeof processedData[field] !== 'string') processedData[field] = JSON.stringify(processedData[field]);
         });
@@ -273,16 +269,7 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
     if (action === 'insert') {
       const items = Array.isArray(data) ? data : [data];
       const results = [];
-      const jsonFieldsMap: any = {
-        profiles: ['roles', 'assigned_classes'],
-        school_configs: ['internal_departments', 'external_agencies'],
-        academic_enrollments: ['levels'],
-        academic_test_scores: ['results'],
-        documents: ['target_teachers', 'acknowledged_by', 'attachments'],
-        attendance: ['coordinate']
-      };
       const fieldsToSerialize = jsonFieldsMap[table] || [];
-      const uuidTables = ['class_rooms', 'students', 'student_savings', 'academic_years', 'student_attendance', 'student_health_records', 'director_events', 'finance_accounts', 'finance_transactions'];
 
       for (const item of items) {
         const processedData = { ...item };
@@ -297,11 +284,17 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
     }
 
     if (action === 'update') {
+      const fieldsToSerialize = jsonFieldsMap[table] || [];
+      const processedData = { ...data };
+      fieldsToSerialize.forEach(field => {
+        if (processedData[field] && typeof processedData[field] !== 'string') processedData[field] = JSON.stringify(processedData[field]);
+      });
+
       if (id) {
-        await pool.query(`UPDATE ?? SET ? WHERE ?? = ?`, [table, data, pk, id]);
+        await pool.query(`UPDATE ?? SET ? WHERE ?? = ?`, [table, processedData, pk, id]);
       } else {
         const whereClauses: string[] = [];
-        const params: any[] = [table, data];
+        const params: any[] = [table, processedData];
 
         if (filters && Object.keys(filters).length > 0) {
           whereClauses.push(...Object.keys(filters).map(k => `?? = ?`));
@@ -451,15 +444,6 @@ app.get('/api/:table', async (req, res) => {
     const [rows]: any = await pool.query(sql, params);
     
     // Parse JSON fields based on table
-    const jsonFieldsMap: any = {
-      profiles: ['roles', 'assigned_classes'],
-      school_configs: ['internal_departments', 'external_agencies'],
-      academic_enrollments: ['levels'],
-      academic_test_scores: ['results'],
-      documents: ['target_teachers', 'acknowledged_by', 'attachments'],
-      attendance: ['coordinate']
-    };
-    
     const fieldsToParse = jsonFieldsMap[table] || [];
     const processedRows = rows.map((row: any) => parseJsonFields(row, fieldsToParse));
     
