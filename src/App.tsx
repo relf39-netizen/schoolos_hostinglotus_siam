@@ -267,7 +267,6 @@ const App: React.FC = () => {
             telegram_chat_id: t.telegramChatId,
             is_suspended: t.isSuspended || false, 
             is_approved: t.isApproved !== false,
-            signature_base_64: t.signatureBase64,
             assigned_classes: t.assignedClasses || []
         }).eq('id', t.id);
         

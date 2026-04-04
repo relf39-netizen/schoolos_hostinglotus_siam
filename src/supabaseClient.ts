@@ -101,37 +101,73 @@ class QueryBuilder {
 
       const p = b64EncodeUnicode(JSON.stringify(payload));
 
-      // Use POST bridge with form-urlencoded to bypass WAF more effectively
-      const response = await fetch(`${API_URL}/v1/bridge`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `p=${encodeURIComponent(p)}`,
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
+      // Try multiple endpoints, parameter names, and HTTP methods to bypass aggressive WAFs
+      const endpoints = [
+        { url: '/v1/bridge', param: 'p', method: 'POST' },
+        { url: '/v1/sync', param: 'z', method: 'POST' },
+        { url: '/v1/bridge', param: 'p', method: 'GET' }, // Try GET fallback
+        { url: '/data-sync', param: 'd', method: 'POST' },
+        { url: '/bridge', param: 'payload', method: 'POST' }
+      ];
 
-      const text = await response.text();
-      
-      if (response.ok) {
+      let lastErrorSnippet = '';
+      let success = false;
+      let finalResult: any = null;
+
+      for (const endpoint of endpoints) {
         try {
-          const result = JSON.parse(text);
-          let data = toCamelCase(result.data);
-          console.log(`[Supabase Mock] Received ${data?.length || 0} rows from ${this.table} via Bridge`);
+          const fetchUrl = endpoint.method === 'GET' 
+            ? `${API_URL}${endpoint.url}?${endpoint.param}=${encodeURIComponent(p)}`
+            : `${API_URL}${endpoint.url}`;
           
-          resolve({ data, error: null });
+          const fetchOptions: any = {
+            method: endpoint.method,
+            headers: endpoint.method === 'POST' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {},
+            signal: controller.signal
+          };
+          
+          if (endpoint.method === 'POST') {
+            fetchOptions.body = `${endpoint.param}=${encodeURIComponent(p)}`;
+          }
+
+          const response = await fetch(fetchUrl, fetchOptions);
+          const text = await response.text();
+          
+          if (response.ok) {
+            try {
+              const result = JSON.parse(text);
+              let data = toCamelCase(result.data);
+              console.log(`[Supabase Mock] Received ${data?.length || 0} rows from ${this.table} via ${endpoint.url} (${endpoint.method})`);
+              finalResult = { data, error: null };
+              success = true;
+              break;
+            } catch (e) {
+              lastErrorSnippet = text.substring(0, 100);
+              continue;
+            }
+          } else {
+            try {
+              const result = JSON.parse(text);
+              finalResult = { data: null, error: { message: result.error || "Unknown server error" } };
+              success = true; // Server returned a JSON error, so it's not a WAF block
+              break;
+            } catch (e) {
+              lastErrorSnippet = text.substring(0, 100);
+              continue;
+            }
+          }
         } catch (e) {
-          const errorMsg = `Server returned HTML instead of JSON for table "${this.table}". \n\nResponse snippet: ${text.substring(0, 200)}...`;
-          resolve({ data: null, error: { message: errorMsg } });
+          continue;
         }
       }
- else {
-        try {
-          const result = JSON.parse(text);
-          resolve({ data: null, error: { message: result.error || "Unknown server error" } });
-        } catch (e) {
-          const errorMsg = `Server error (${response.status}) for table "${this.table}". \n\nResponse snippet: ${text.substring(0, 200)}...`;
-          resolve({ data: null, error: { message: errorMsg } });
-        }
+
+      clearTimeout(timeoutId);
+
+      if (success) {
+        resolve(finalResult);
+      } else {
+        const errorMsg = `เซิร์ฟเวอร์ Hosting ปฏิเสธการเชื่อมต่อ (Firewall บล็อกการเข้าถึง) \nตาราง: ${this.table} \nSnippet: ${lastErrorSnippet}...`;
+        resolve({ data: null, error: { message: errorMsg } });
       }
     } catch (error: any) {
       console.error(`Supabase Mock Error (${this.table}):`, error);
@@ -254,23 +290,33 @@ class MutationQueryBuilder {
 
       const p = b64EncodeUnicode(JSON.stringify(payload));
       
-      // Try multiple endpoints and parameter names to bypass aggressive WAFs
+      // Try multiple endpoints, parameter names, and HTTP methods to bypass aggressive WAFs
       const endpoints = [
-        { url: '/api/v1/sync', param: 'z' },
-        { url: '/api/v1/bridge', param: 'p' },
-        { url: '/api/data-sync', param: 'd' },
-        { url: '/api/bridge', param: 'payload' }
+        { url: '/api/v1/sync', param: 'z', method: 'POST' },
+        { url: '/api/v1/bridge', param: 'p', method: 'POST' },
+        { url: '/api/v1/sync', param: 'z', method: 'GET' }, // Try GET fallback
+        { url: '/api/data-sync', param: 'd', method: 'POST' },
+        { url: '/api/bridge', param: 'payload', method: 'POST' }
       ];
 
       let lastErrorSnippet = '';
       
       for (const endpoint of endpoints) {
         try {
-          const response = await fetch(`${window.location.origin}${endpoint.url}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `${endpoint.param}=${encodeURIComponent(p)}`
-          });
+          const fetchUrl = endpoint.method === 'GET' 
+            ? `${window.location.origin}${endpoint.url}?${endpoint.param}=${encodeURIComponent(p)}`
+            : `${window.location.origin}${endpoint.url}`;
+          
+          const fetchOptions: any = {
+            method: endpoint.method,
+            headers: endpoint.method === 'POST' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}
+          };
+          
+          if (endpoint.method === 'POST') {
+            fetchOptions.body = `${endpoint.param}=${encodeURIComponent(p)}`;
+          }
+
+          const response = await fetch(fetchUrl, fetchOptions);
 
           const text = await response.text();
           try {
@@ -312,21 +358,31 @@ export const supabase: any = {
             const p = b64EncodeUnicode(JSON.stringify(payload));
 
             const endpoints = [
-              { url: '/api/v1/sync', param: 'z' },
-              { url: '/api/v1/bridge', param: 'p' },
-              { url: '/api/data-sync', param: 'd' },
-              { url: '/api/bridge', param: 'payload' }
+              { url: '/api/v1/sync', param: 'z', method: 'POST' },
+              { url: '/api/v1/bridge', param: 'p', method: 'POST' },
+              { url: '/api/v1/sync', param: 'z', method: 'GET' },
+              { url: '/api/data-sync', param: 'd', method: 'POST' },
+              { url: '/api/bridge', param: 'payload', method: 'POST' }
             ];
 
             let lastErrorSnippet = '';
 
             for (const endpoint of endpoints) {
               try {
-                const response = await fetch(`${window.location.origin}${endpoint.url}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                  body: `${endpoint.param}=${encodeURIComponent(p)}`
-                });
+                const fetchUrl = endpoint.method === 'GET' 
+                  ? `${window.location.origin}${endpoint.url}?${endpoint.param}=${encodeURIComponent(p)}`
+                  : `${window.location.origin}${endpoint.url}`;
+                
+                const fetchOptions: any = {
+                  method: endpoint.method,
+                  headers: endpoint.method === 'POST' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}
+                };
+                
+                if (endpoint.method === 'POST') {
+                  fetchOptions.body = `${endpoint.param}=${encodeURIComponent(p)}`;
+                }
+
+                const response = await fetch(fetchUrl, fetchOptions);
 
                 const text = await response.text();
                 try {
@@ -363,21 +419,31 @@ export const supabase: any = {
             const p = b64EncodeUnicode(JSON.stringify(payload));
 
             const endpoints = [
-              { url: '/api/v1/sync', param: 'z' },
-              { url: '/api/v1/bridge', param: 'p' },
-              { url: '/api/data-sync', param: 'd' },
-              { url: '/api/bridge', param: 'payload' }
+              { url: '/api/v1/sync', param: 'z', method: 'POST' },
+              { url: '/api/v1/bridge', param: 'p', method: 'POST' },
+              { url: '/api/v1/sync', param: 'z', method: 'GET' },
+              { url: '/api/data-sync', param: 'd', method: 'POST' },
+              { url: '/api/bridge', param: 'payload', method: 'POST' }
             ];
 
             let lastErrorSnippet = '';
 
             for (const endpoint of endpoints) {
               try {
-                const response = await fetch(`${window.location.origin}${endpoint.url}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                  body: `${endpoint.param}=${encodeURIComponent(p)}`
-                });
+                const fetchUrl = endpoint.method === 'GET' 
+                  ? `${window.location.origin}${endpoint.url}?${endpoint.param}=${encodeURIComponent(p)}`
+                  : `${window.location.origin}${endpoint.url}`;
+                
+                const fetchOptions: any = {
+                  method: endpoint.method,
+                  headers: endpoint.method === 'POST' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}
+                };
+                
+                if (endpoint.method === 'POST') {
+                  fetchOptions.body = `${endpoint.param}=${encodeURIComponent(p)}`;
+                }
+
+                const response = await fetch(fetchUrl, fetchOptions);
 
                 const text = await response.text();
                 try {
