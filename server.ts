@@ -159,6 +159,21 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
     const { action, table, data, id, pk = 'id', onConflict, filters } = parsed;
     console.log(`[Data Sync API] ${action.toUpperCase()} on ${table}`, { id, pk });
     
+    if (action === 'select') {
+      let query = `SELECT * FROM ??`;
+      const params = [table];
+      
+      if (filters && Object.keys(filters).length > 0) {
+        const whereClauses = Object.keys(filters).map(k => `?? = ?`);
+        const whereParams = Object.entries(filters).flatMap(([k, v]) => [k, v]);
+        query += ` WHERE ${whereClauses.join(' AND ')}`;
+        params.push(...whereParams);
+      }
+      
+      const [rows]: any = await pool.query(query, params);
+      return res.json({ success: true, data: rows });
+    }
+
     if (action === 'upsert') {
       const items = Array.isArray(data) ? data : [data];
       const results = await performBulkUpsert(table, items);
