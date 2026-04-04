@@ -184,6 +184,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({
     const [isSavingConfig, setIsSavingConfig] = useState(false);
     const [isFixingSchema, setIsFixingSchema] = useState(false);
     const [isGettingLocation, setIsGettingLocation] = useState(false);
+    const [isImporting, setIsImporting] = useState(false);
+    const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+    const [showAlumni, setShowAlumni] = useState(false);
     const [availableClasses, setAvailableClasses] = useState<string[]>([]);
 
     const [config, setConfig] = useState<SystemConfig>({ 
@@ -486,7 +489,8 @@ function setTelegramWebhook() {
             const { data: classesData } = await supabase
                 .from('class_rooms')
                 .select('*')
-                .eq('school_id', currentSchool.id);
+                .eq('school_id', currentSchool.id)
+                .order('created_at', { ascending: true });
             
             if (classesData) {
                 setClassRooms(classesData);
@@ -775,45 +779,80 @@ function setTelegramWebhook() {
     const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        setIsImporting(true);
         const reader = new FileReader();
         reader.onload = async (evt) => {
-            const bstr = evt.target?.result;
-            const wb = XLSX.read(bstr, { type: 'binary' });
-            const ws = wb.Sheets[wb.SheetNames[0]];
-            const data = XLSX.utils.sheet_to_json(ws) as any[];
-            const toInsert = data.map(row => ({
-                school_id: currentSchool.id,
-                name: row.name || row['ชื่อ-นามสกุล'] || row['ชื่อ'] || row['ชื่อนักเรียน'],
-                current_class: row.class || row['ชั้น'] || row['ห้อง'] || row['ระดับชั้น'] || row['ชั้นเรียน'],
-                academic_year: currentAcademicYear || (new Date().getFullYear() + 543).toString(),
-                is_active: 1,
-                address: row.address || row['ที่อยู่'],
-                phone_number: row.phoneNumber || row['เบอร์โทร'] || row['เบอร์โทรศัพท์'],
-                father_name: row.fatherName || row['ชื่อบิดา'],
-                mother_name: row.motherName || row['ชื่อมารดา'],
-                guardian_name: row.guardianName || row['ชื่อผู้ปกครอง'],
-                medical_conditions: row.medicalConditions || row['โรคประจำตัว'] || row['แพ้อาหาร']
-            })).filter(s => s.name && s.current_class);
-            
-            if (toInsert.length > 0) {
-                const { error } = await supabase
-                    .from('students')
-                    .insert(toInsert);
+            try {
+                const bstr = evt.target?.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const data = XLSX.utils.sheet_to_json(ws) as any[];
+                const toInsert = data.map(row => ({
+                    school_id: currentSchool.id,
+                    name: row.name || row['ชื่อ-นามสกุล'] || row['ชื่อ'] || row['ชื่อนักเรียน'],
+                    current_class: row.class || row['ชั้น'] || row['ห้อง'] || row['ระดับชั้น'] || row['ชั้นเรียน'],
+                    academic_year: currentAcademicYear || (new Date().getFullYear() + 543).toString(),
+                    is_active: 1,
+                    address: row.address || row['ที่อยู่'],
+                    phone_number: row.phoneNumber || row['เบอร์โทร'] || row['เบอร์โทรศัพท์'],
+                    father_name: row.fatherName || row['ชื่อบิดา'],
+                    mother_name: row.motherName || row['ชื่อมารดา'],
+                    guardian_name: row.guardianName || row['ชื่อผู้ปกครอง'],
+                    medical_conditions: row.medicalConditions || row['โรคประจำตัว'] || row['แพ้อาหาร']
+                })).filter(s => s.name && s.current_class);
                 
-                if (!error) {
-                    fetchStudentData();
-                    alert('นำเข้าสำเร็จ');
-                } else {
-                    alert('ขัดข้อง: ' + (error.message || 'Unknown error'));
+                if (toInsert.length > 0) {
+                    const { error } = await supabase
+                        .from('students')
+                        .insert(toInsert);
+                    
+                    if (!error) {
+                        fetchStudentData();
+                        alert('นำเข้าสำเร็จ');
+                    } else {
+                        alert('ขัดข้อง: ' + (error.message || 'Unknown error'));
+                    }
                 }
+            } catch (err: any) {
+                alert('เกิดข้อผิดพลาดในการนำเข้า: ' + err.message);
+            } finally {
+                setIsImporting(false);
+                if (e.target) e.target.value = '';
             }
+        };
+        reader.onerror = () => {
+            alert('ไม่สามารถอ่านไฟล์ได้');
+            setIsImporting(false);
         };
         reader.readAsBinaryString(file);
     };
 
+    const handleBulkDeleteStudents = async () => {
+        if (selectedStudentIds.length === 0) return;
+        if (!confirm(`ยืนยันการลบข้อมูลนักเรียนที่เลือกทั้งหมด ${selectedStudentIds.length} คน? \nการกระทำนี้ไม่สามารถย้อนกลับได้`)) return;
+        
+        try {
+            const { error } = await supabase
+                .from('students')
+                .delete()
+                .in('id', selectedStudentIds);
+            
+            if (!error) {
+                fetchStudentData();
+                setSelectedStudentIds([]);
+                alert('ลบข้อมูลสำเร็จ');
+            } else {
+                throw error;
+            }
+        } catch (err: any) {
+            alert('เกิดข้อผิดพลาดในการลบ: ' + err.message);
+        }
+    };
+
     const filteredStudents = students.filter(s => 
         (selectedClass === 'All' || s.currentClass === selectedClass) &&
-        ((s.name || '').includes(studentSearch) || (s.id || '').includes(studentSearch))
+        ((s.name || '').includes(studentSearch) || (s.id || '').includes(studentSearch)) &&
+        (showAlumni ? s.isAlumni === true : !s.isAlumni)
     );
 
     const checkScriptVersion = async () => {
@@ -1095,7 +1134,14 @@ function setTelegramWebhook() {
                 )}
 
                 {activeTab === 'STUDENTS' && (
-                    <div className="space-y-8 animate-fade-in py-4">
+                    <div className="space-y-8 animate-fade-in py-4 relative">
+                        {isImporting && (
+                            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center rounded-3xl">
+                                <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                                <p className="font-black text-indigo-600 animate-pulse">กำลังนำเข้าข้อมูลนักเรียน...</p>
+                                <p className="text-slate-400 text-xs mt-2">กรุณารอสักครู่ ระบบกำลังประมวลผลไฟล์ Excel</p>
+                            </div>
+                        )}
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                             <div className="lg:col-span-2 space-y-6">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
@@ -1123,11 +1169,35 @@ function setTelegramWebhook() {
 
                                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                                     <div className="p-6 border-b border-slate-50 flex flex-col md:flex-row gap-4 items-center justify-between bg-slate-50/50">
-                                        <div className="relative w-full md:w-72">
-                                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
-                                            <input type="text" placeholder="ค้นหาชื่อนักเรียน..." value={studentSearch} onChange={e => setStudentSearch(e.target.value)} className="w-full pl-12 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 ring-indigo-500/10 transition-all shadow-inner"/>
+                                        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+                                            <div className="relative w-full md:w-64">
+                                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
+                                                <input type="text" placeholder="ค้นหาชื่อนักเรียน..." value={studentSearch} onChange={e => setStudentSearch(e.target.value)} className="w-full pl-12 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 ring-indigo-500/10 transition-all shadow-inner"/>
+                                            </div>
+                                            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+                                                <button 
+                                                    onClick={() => setShowAlumni(false)}
+                                                    className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all ${!showAlumni ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                                                >
+                                                    นักเรียนปัจจุบัน
+                                                </button>
+                                                <button 
+                                                    onClick={() => setShowAlumni(true)}
+                                                    className={`px-3 py-1 rounded-lg text-[10px] font-black transition-all ${showAlumni ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                                                >
+                                                    ศิษย์เก่า
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="flex items-center gap-3 w-full md:w-auto">
+                                            {selectedStudentIds.length > 0 && (
+                                                <button 
+                                                    onClick={handleBulkDeleteStudents}
+                                                    className="px-4 py-2.5 bg-red-50 text-red-600 border border-red-100 rounded-xl font-black text-xs flex items-center gap-2 hover:bg-red-100 transition-all animate-bounce-subtle"
+                                                >
+                                                    <Trash2 size={16}/> ลบที่เลือก ({selectedStudentIds.length})
+                                                </button>
+                                            )}
                                             <Filter className="text-slate-400" size={18}/>
                                             <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)} className="flex-1 md:w-40 px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 ring-indigo-500/10 shadow-inner">
                                                 <option value="All">ทุกชั้นเรียน</option>
@@ -1139,6 +1209,17 @@ function setTelegramWebhook() {
                                         <table className="w-full text-left border-collapse">
                                             <thead>
                                                 <tr className="bg-slate-50/50">
+                                                    <th className="px-6 py-4 w-10">
+                                                        <button 
+                                                            onClick={() => {
+                                                                if (selectedStudentIds.length === filteredStudents.length) setSelectedStudentIds([]);
+                                                                else setSelectedStudentIds(filteredStudents.map(s => s.id));
+                                                            }}
+                                                            className="text-slate-400 hover:text-indigo-600 transition-colors"
+                                                        >
+                                                            {selectedStudentIds.length === filteredStudents.length && filteredStudents.length > 0 ? <CheckSquare size={20}/> : <Square size={20}/>}
+                                                        </button>
+                                                    </th>
                                                     <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">รูปภาพ</th>
                                                     <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">ชื่อ-นามสกุล</th>
                                                     <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">ชั้นเรียน</th>
@@ -1147,11 +1228,22 @@ function setTelegramWebhook() {
                                             </thead>
                                             <tbody className="divide-y divide-slate-50">
                                                 {isLoadingStudents ? (
-                                                    <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 font-bold italic animate-pulse">กำลังโหลดข้อมูล...</td></tr>
+                                                    <tr><td colSpan={5} className="px-6 py-20 text-center text-slate-300 font-bold italic animate-pulse">กำลังโหลดข้อมูล...</td></tr>
                                                 ) : filteredStudents.length === 0 ? (
-                                                    <tr><td colSpan={4} className="px-6 py-20 text-center text-slate-300 font-bold italic">ไม่พบข้อมูลนักเรียน</td></tr>
+                                                    <tr><td colSpan={5} className="px-6 py-20 text-center text-slate-300 font-bold italic">ไม่พบข้อมูลนักเรียน</td></tr>
                                                 ) : filteredStudents.map(s => (
-                                                    <tr key={s.id} className="hover:bg-slate-50/50 transition-colors group">
+                                                    <tr key={s.id} className={`hover:bg-slate-50/50 transition-colors group ${selectedStudentIds.includes(s.id) ? 'bg-indigo-50/30' : ''}`}>
+                                                        <td className="px-6 py-4">
+                                                            <button 
+                                                                onClick={() => {
+                                                                    if (selectedStudentIds.includes(s.id)) setSelectedStudentIds(selectedStudentIds.filter(id => id !== s.id));
+                                                                    else setSelectedStudentIds([...selectedStudentIds, s.id]);
+                                                                }}
+                                                                className={`${selectedStudentIds.includes(s.id) ? 'text-indigo-600' : 'text-slate-300'} hover:text-indigo-600 transition-colors`}
+                                                            >
+                                                                {selectedStudentIds.includes(s.id) ? <CheckSquare size={20}/> : <Square size={20}/>}
+                                                            </button>
+                                                        </td>
                                                         <td className="px-6 py-4">
                                                             <div className="w-10 h-12 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 shadow-inner">
                                                                 {s.photoUrl ? (

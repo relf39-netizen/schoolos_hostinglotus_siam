@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
     Calendar, CheckCircle2, XCircle, Clock, AlertCircle, 
     Users, Search, Filter, TrendingUp, Download, 
-    Printer, ChevronRight, GraduationCap, Save, 
+    Printer, ChevronRight, GraduationCap, Save, Info,
     ArrowLeft, LayoutDashboard, History, UserCheck,
     Camera, MapPin, Phone, Home, Heart, User, Plus, Trash2,
     Scale, Ruler, Loader, BarChart3, Activity, Edit
@@ -42,7 +42,10 @@ interface StudentAttendanceSystemProps {
 }
 
 const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ currentUser }) => {
-    const [viewMode, setViewMode] = useState<'DASHBOARD' | 'RECORD' | 'HISTORY' | 'STUDENT_INFO' | 'OVERALL_REPORT' | 'CLASS_REPORT'>('DASHBOARD');
+    const [viewMode, setViewMode] = useState<'DASHBOARD' | 'RECORD' | 'HISTORY' | 'STUDENT_INFO' | 'OVERALL_REPORT' | 'CLASS_REPORT' | 'ALUMNI'>('DASHBOARD');
+    const [alumniStudents, setAlumniStudents] = useState<Student[]>([]);
+    const [selectedAlumniYear, setSelectedAlumniYear] = useState<string>('All');
+    const [alumniSearch, setAlumniSearch] = useState('');
     const [showConfirmModal, setShowConfirmModal] = useState<{
         show: boolean;
         title: string;
@@ -177,9 +180,35 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
         }
     };
 
+    const fetchAlumniData = async () => {
+        if (!supabase) return;
+        setIsLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('students')
+                .select('*')
+                .eq('school_id', currentUser.schoolId)
+                .eq('is_alumni', true)
+                .order('graduation_year', { ascending: false });
+            
+            if (data) {
+                setAlumniStudents(data.map((s: any) => ({
+                    ...s,
+                    location: (s.lat && s.lng) ? { lat: s.lat, lng: s.lng } : undefined
+                })));
+            }
+        } catch (err) {
+            console.error("Error fetching alumni data:", err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (viewMode === 'DASHBOARD') {
             fetchAbsenceStats();
+        } else if (viewMode === 'ALUMNI') {
+            fetchAlumniData();
         }
     }, [viewMode, currentUser.schoolId]);
 
@@ -890,6 +919,87 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
                 </div>
             </div>
 
+            {viewMode === 'ALUMNI' && (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="flex items-center justify-between">
+                        <button onClick={() => setViewMode('DASHBOARD')} className="p-2 hover:bg-slate-100 rounded-xl transition-all flex items-center gap-2 font-bold text-slate-600">
+                            <ArrowLeft size={20}/> กลับหน้าหลัก
+                        </button>
+                        <h3 className="font-black text-xl text-slate-800 flex items-center gap-2">
+                            <GraduationCap className="text-rose-500" /> ข้อมูลศิษย์เก่า (Alumni)
+                        </h3>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
+                        <div className="flex flex-col md:flex-row gap-4 mb-6">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
+                                <input 
+                                    type="text" 
+                                    placeholder="ค้นหาชื่อศิษย์เก่า..." 
+                                    value={alumniSearch}
+                                    onChange={e => setAlumniSearch(e.target.value)}
+                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 ring-rose-500/10 transition-all"
+                                />
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <Filter className="text-slate-400" size={18}/>
+                                <select 
+                                    value={selectedAlumniYear} 
+                                    onChange={e => setSelectedAlumniYear(e.target.value)}
+                                    className="px-4 py-3 bg-slate-50 border-none rounded-2xl font-bold text-sm outline-none focus:ring-2 ring-rose-500/10"
+                                >
+                                    <option value="All">ทุกปีการศึกษาที่จบ</option>
+                                    {[...new Set(alumniStudents.map(s => s.graduationYear))].filter(Boolean).sort().reverse().map(year => (
+                                        <option key={year} value={year}>ปีการศึกษา {year}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {alumniStudents
+                                .filter(s => 
+                                    (selectedAlumniYear === 'All' || s.graduationYear === selectedAlumniYear) &&
+                                    (s.name.includes(alumniSearch))
+                                )
+                                .map(s => (
+                                    <div key={s.id} className="bg-slate-50 p-4 rounded-3xl border border-slate-100 hover:border-rose-200 transition-all group relative overflow-hidden">
+                                        <div className="flex items-center gap-4 relative z-10">
+                                            <div className="w-16 h-20 bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm shrink-0">
+                                                {s.photoUrl ? (
+                                                    <img src={getDirectDriveUrl(s.photoUrl)} className="w-full h-full object-cover" alt={s.name} referrerPolicy="no-referrer" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-slate-200"><User size={32}/></div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="font-black text-slate-800 truncate">{s.name}</h4>
+                                                <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mt-1">จบปีการศึกษา {s.graduationYear || '-'}</p>
+                                                <p className="text-[10px] font-bold text-slate-400 mt-0.5">รุ่นที่ {s.batchNumber || '-'}</p>
+                                                <button 
+                                                    onClick={() => openStudentInfo(s)}
+                                                    className="mt-3 px-4 py-1.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all flex items-center gap-2"
+                                                >
+                                                    <Info size={12}/> ดูรายละเอียด
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="absolute -right-4 -bottom-4 text-rose-500/5 group-hover:scale-110 transition-transform duration-700">
+                                            <GraduationCap size={80}/>
+                                        </div>
+                                    </div>
+                                ))}
+                            {alumniStudents.length === 0 && (
+                                <div className="col-span-full py-20 text-center text-slate-300 font-bold italic">
+                                    ไม่พบข้อมูลศิษย์เก่าในระบบ
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {viewMode === 'DASHBOARD' && (
                 <div className="space-y-6 animate-fade-in">
                     {/* Stats Grid */}
@@ -936,6 +1046,18 @@ const StudentAttendanceSystem: React.FC<StudentAttendanceSystemProps> = ({ curre
                             <div className="text-left">
                                 <p className="font-black text-slate-700 text-sm">ประวัติการมาเรียน</p>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase">Attendance History</p>
+                            </div>
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('ALUMNI')}
+                            className="bg-white border border-slate-200 p-4 rounded-2xl flex items-center gap-3 hover:bg-slate-50 transition-all shadow-sm group"
+                        >
+                            <div className="p-2 bg-rose-50 text-rose-600 rounded-xl group-hover:bg-rose-600 group-hover:text-white transition-all">
+                                <GraduationCap size={20} />
+                            </div>
+                            <div className="text-left">
+                                <p className="font-black text-slate-700 text-sm">ข้อมูลศิษย์เก่า</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">Alumni Records</p>
                             </div>
                         </button>
                     </div>
