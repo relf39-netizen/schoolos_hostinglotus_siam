@@ -413,15 +413,18 @@ function setTelegramWebhook() {
             
             if (data) {
                 setConfig({
-                    driveFolderId: data.drive_folder_id || '',
-                    scriptUrl: data.script_url || '',
-                    telegramBotToken: data.telegram_bot_token || '',
-                    telegramBotUsername: data.telegram_bot_username || '',
-                    appBaseUrl: data.app_base_url || '',
-                    officialGarudaBase64: data.official_garuda_base_64 || '',
-                    directorSignatureBase64: data.director_signature_base_64 || '',
-                    directorSignatureScale: data.director_signature_scale || 1.0,
-                    directorSignatureYOffset: data.director_signature_y_offset || 0,
+                    driveFolderId: data.driveFolderId || '',
+                    scriptUrl: data.scriptUrl || '',
+                    telegramBotToken: data.telegramBotToken || '',
+                    telegramBotUsername: data.telegramBotUsername || '',
+                    appBaseUrl: data.appBaseUrl || '',
+                    officialGarudaBase64: data.officialGarudaBase64 || '',
+                    directorSignatureBase64: data.directorSignatureBase64 || '',
+                    directorSignatureScale: data.directorSignatureScale || 1.0,
+                    directorSignatureYOffset: data.directorSignatureYOffset || 0,
+                    officerDepartment: data.officerDepartment || '',
+                    internalDepartments: data.internalDepartments || [],
+                    externalAgencies: data.externalAgencies || [],
                     schoolName: currentSchool.name
                 });
             } else {
@@ -960,16 +963,19 @@ function setTelegramWebhook() {
         setIsSavingConfig(true);
         try {
             const { error } = await client.from('school_configs').upsert({
-                school_id: currentSchool.id,
-                drive_folder_id: config.driveFolderId,
-                script_url: config.scriptUrl,
-                telegram_bot_token: config.telegramBotToken,
-                telegram_bot_username: config.telegramBotUsername,
-                app_base_url: config.appBaseUrl,
-                official_garuda_base_64: config.officialGarudaBase64,
-                director_signature_base_64: config.directorSignatureBase64,
-                director_signature_scale: config.directorSignatureScale,
-                director_signature_y_offset: config.directorSignatureYOffset
+                schoolId: currentSchool.id,
+                driveFolderId: config.driveFolderId,
+                scriptUrl: config.scriptUrl,
+                telegramBotToken: config.telegramBotToken,
+                telegramBotUsername: config.telegramBotUsername,
+                appBaseUrl: config.appBaseUrl,
+                officialGarudaBase64: config.officialGarudaBase64,
+                directorSignatureBase64: config.directorSignatureBase64,
+                directorSignatureScale: config.directorSignatureScale,
+                directorSignatureYOffset: config.directorSignatureYOffset,
+                officerDepartment: config.officerDepartment,
+                internalDepartments: config.internalDepartments,
+                externalAgencies: config.externalAgencies
             });
             if (!error) alert("บันทึกการตั้งค่าสำเร็จ");
             else throw error;
