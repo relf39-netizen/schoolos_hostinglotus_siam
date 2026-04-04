@@ -185,6 +185,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({
     const [isFixingSchema, setIsFixingSchema] = useState(false);
     const [isGettingLocation, setIsGettingLocation] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
+    const [importPreviewData, setImportPreviewData] = useState<any[]>([]);
+    const [isImportPreviewOpen, setIsImportPreviewOpen] = useState(false);
     const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
     const [showAlumni, setShowAlumni] = useState(false);
     const [availableClasses, setAvailableClasses] = useState<string[]>([]);
@@ -793,25 +795,13 @@ function setTelegramWebhook() {
                     current_class: row.class || row['ชั้น'] || row['ห้อง'] || row['ระดับชั้น'] || row['ชั้นเรียน'],
                     academic_year: currentAcademicYear || (new Date().getFullYear() + 543).toString(),
                     is_active: 1,
-                    address: row.address || row['ที่อยู่'],
-                    phone_number: row.phoneNumber || row['เบอร์โทร'] || row['เบอร์โทรศัพท์'],
-                    father_name: row.fatherName || row['ชื่อบิดา'],
-                    mother_name: row.motherName || row['ชื่อมารดา'],
-                    guardian_name: row.guardianName || row['ชื่อผู้ปกครอง'],
-                    medical_conditions: row.medicalConditions || row['โรคประจำตัว'] || row['แพ้อาหาร']
                 })).filter(s => s.name && s.current_class);
                 
                 if (toInsert.length > 0) {
-                    const { error } = await supabase
-                        .from('students')
-                        .insert(toInsert);
-                    
-                    if (!error) {
-                        fetchStudentData();
-                        alert('นำเข้าสำเร็จ');
-                    } else {
-                        alert('ขัดข้อง: ' + (error.message || 'Unknown error'));
-                    }
+                    setImportPreviewData(toInsert);
+                    setIsImportPreviewOpen(true);
+                } else {
+                    alert('ไม่พบข้อมูลที่ถูกต้องในไฟล์ (ต้องการ ชื่อ-นามสกุล และ ชั้น)');
                 }
             } catch (err: any) {
                 alert('เกิดข้อผิดพลาดในการนำเข้า: ' + err.message);
@@ -825,6 +815,29 @@ function setTelegramWebhook() {
             setIsImporting(false);
         };
         reader.readAsBinaryString(file);
+    };
+
+    const confirmImport = async () => {
+        if (importPreviewData.length === 0) return;
+        setIsImporting(true);
+        try {
+            const { error } = await supabase
+                .from('students')
+                .insert(importPreviewData);
+            
+            if (!error) {
+                fetchStudentData();
+                alert('นำเข้าสำเร็จ ' + importPreviewData.length + ' รายการ');
+                setIsImportPreviewOpen(false);
+                setImportPreviewData([]);
+            } else {
+                alert('ขัดข้อง: ' + (error.message || 'Unknown error'));
+            }
+        } catch (err: any) {
+            alert('เกิดข้อผิดพลาด: ' + err.message);
+        } finally {
+            setIsImporting(false);
+        }
     };
 
     const handleBulkDeleteStudents = async () => {
@@ -1645,40 +1658,8 @@ function setTelegramWebhook() {
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 overflow-y-auto max-h-[90vh] no-scrollbar">
                         <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><Plus className="text-indigo-600"/> เพิ่มนักเรียนใหม่</h3>
                         
-                        <div className="flex flex-col items-center gap-4 mb-6">
-                            <div className="relative group">
-                                <div className="w-24 h-32 bg-slate-100 rounded-2xl overflow-hidden border-2 border-white shadow-md ring-1 ring-slate-100 flex items-center justify-center">
-                                    {newStudentForm.photoUrl ? (
-                                        <img src={getDirectDriveUrl(newStudentForm.photoUrl)} className="w-full h-full object-cover" alt="Student" referrerPolicy="no-referrer" />
-                                    ) : (
-                                        <div className="flex flex-col items-center justify-center text-slate-300 gap-1">
-                                            <User size={32} />
-                                            <span className="text-[8px] font-black uppercase tracking-widest">No Photo</span>
-                                        </div>
-                                    )}
-                                    {isUploadingPhoto && (
-                                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center">
-                                            <RefreshCw className="text-white animate-spin" size={24} />
-                                        </div>
-                                    )}
-                                </div>
-                                <label className="absolute -bottom-2 -right-2 w-8 h-8 bg-indigo-600 text-white rounded-xl shadow-lg flex items-center justify-center cursor-pointer hover:bg-indigo-700 transition-all border-2 border-white">
-                                    <Image size={14} />
-                                    <input 
-                                        type="file" 
-                                        className="hidden" 
-                                        accept="image/*"
-                                        onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file && checkFileSize(file, 1)) handlePhotoUpload(file, false);
-                                        }}
-                                    />
-                                </label>
-                            </div>
-                        </div>
-
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4">
                                 <div>
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">ชื่อ-นามสกุล</label>
                                     <input type="text" value={newStudentForm.name} onChange={e => setNewStudentForm({...newStudentForm, name: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold outline-none focus:border-indigo-500 shadow-inner"/>
@@ -1690,35 +1671,6 @@ function setTelegramWebhook() {
                                         {classRooms.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                                     </select>
                                 </div>
-                            </div>
-
-                            <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">ที่อยู่</label>
-                                <textarea value={newStudentForm.address} onChange={e => setNewStudentForm({...newStudentForm, address: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold outline-none focus:border-indigo-500 shadow-inner h-20" placeholder="บ้านเลขที่ หมู่ที่ ตำบล..."/>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">เบอร์โทรศัพท์</label>
-                                    <input type="text" value={newStudentForm.phoneNumber} onChange={e => setNewStudentForm({...newStudentForm, phoneNumber: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold outline-none focus:border-indigo-500 shadow-inner"/>
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">ชื่อบิดา</label>
-                                    <input type="text" value={newStudentForm.fatherName} onChange={e => setNewStudentForm({...newStudentForm, fatherName: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold outline-none focus:border-indigo-500 shadow-inner"/>
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">ชื่อมารดา</label>
-                                    <input type="text" value={newStudentForm.motherName} onChange={e => setNewStudentForm({...newStudentForm, motherName: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold outline-none focus:border-indigo-500 shadow-inner"/>
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">ชื่อผู้ปกครอง</label>
-                                    <input type="text" value={newStudentForm.guardianName} onChange={e => setNewStudentForm({...newStudentForm, guardianName: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold outline-none focus:border-indigo-500 shadow-inner"/>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">โรคประจำตัว / ข้อมูลสุขภาพ</label>
-                                <input type="text" value={newStudentForm.medicalConditions} onChange={e => setNewStudentForm({...newStudentForm, medicalConditions: e.target.value})} className="w-full p-3 bg-slate-50 border rounded-xl font-bold outline-none focus:border-indigo-500 shadow-inner" placeholder="เช่น แพ้อาหารทะเล, หอบหืด"/>
                             </div>
 
                             <div className="pt-4 border-t border-slate-50">
@@ -1737,6 +1689,45 @@ function setTelegramWebhook() {
                         <div className="flex gap-3 pt-8 mt-8 border-t border-slate-100">
                             <button onClick={() => setIsAddStudentOpen(false)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs hover:bg-slate-200 transition-all">ยกเลิก</button>
                             <button onClick={handleAddStudent} className="flex-[2] py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl hover:bg-indigo-700 transition-all uppercase tracking-widest">บันทึกข้อมูลนักเรียน</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isImportPreviewOpen && (
+                <div className="fixed inset-0 bg-slate-950/80 z-[90] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-8 overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xl font-black text-slate-800 flex items-center gap-2"><FileSpreadsheet className="text-emerald-600"/> ตรวจสอบข้อมูลก่อนนำเข้า</h3>
+                            <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{importPreviewData.length} รายการ</span>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto pr-2 mb-6 border rounded-2xl bg-slate-50 shadow-inner">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="sticky top-0 bg-white shadow-sm z-10">
+                                    <tr>
+                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">ลำดับ</th>
+                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">ชื่อ-นามสกุล</th>
+                                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">ชั้นเรียน</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {importPreviewData.map((s, idx) => (
+                                        <tr key={idx} className="hover:bg-white transition-colors border-b border-slate-100 last:border-0">
+                                            <td className="p-4 text-xs font-bold text-slate-400">{idx + 1}</td>
+                                            <td className="p-4 text-xs font-bold text-slate-800">{s.name}</td>
+                                            <td className="p-4 text-xs font-bold text-slate-600">{s.current_class}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="flex gap-3 pt-4 border-t border-slate-100">
+                            <button onClick={() => { setIsImportPreviewOpen(false); setImportPreviewData([]); }} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black uppercase text-xs hover:bg-slate-200 transition-all">ยกเลิก</button>
+                            <button onClick={confirmImport} disabled={isImporting} className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black shadow-xl hover:bg-emerald-700 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
+                                {isImporting ? <Loader className="animate-spin" size={18}/> : <Check size={18}/>} ยืนยันนำเข้าข้อมูล
+                            </button>
                         </div>
                     </div>
                 </div>
