@@ -849,11 +849,18 @@ function setTelegramWebhook() {
         }
     };
 
-    const filteredStudents = students.filter(s => 
-        (selectedClass === 'All' || s.currentClass === selectedClass) &&
-        ((s.name || '').includes(studentSearch) || (s.id || '').includes(studentSearch)) &&
-        (showAlumni ? s.isAlumni === true : !s.isAlumni)
-    );
+    const filteredStudents = students
+        .filter(s => 
+            (selectedClass === 'All' || s.currentClass === selectedClass) &&
+            ((s.name || '').includes(studentSearch) || (s.id || '').includes(studentSearch)) &&
+            (showAlumni ? s.isAlumni === true : !s.isAlumni)
+        )
+        .sort((a, b) => {
+            const classAIndex = classRooms.findIndex(c => c.name === a.currentClass);
+            const classBIndex = classRooms.findIndex(c => c.name === b.currentClass);
+            if (classAIndex !== classBIndex) return classAIndex - classBIndex;
+            return (a.name || '').localeCompare(b.name || '', 'th');
+        });
 
     const checkScriptVersion = async () => {
         if (!config.scriptUrl) {

@@ -38,6 +38,8 @@ function toSnakeCase(obj: any): any {
 class QueryBuilder {
   private table: string;
   private filters: Record<string, any> = {};
+  private inFilters: Record<string, any[]> = {};
+  private orderBy?: { column: string; ascending: boolean };
 
   constructor(table: string) {
     this.table = table;
@@ -52,8 +54,13 @@ class QueryBuilder {
     return this;
   }
 
+  in(column: string, values: any[]) {
+    this.inFilters[column] = values;
+    return this;
+  }
+
   order(column: string, { ascending = true } = {}) {
-    // Ordering handled by server for now
+    this.orderBy = { column, ascending };
     return this;
   }
 
@@ -71,12 +78,26 @@ class QueryBuilder {
         else processedFilters[snakeKey] = value;
       });
 
+      const processedInFilters: Record<string, any[]> = {};
+      Object.entries(this.inFilters).forEach(([key, values]) => {
+        const snakeKey = key.replace(/[A-Z]/g, $1 => `_${$1.toLowerCase()}`);
+        processedInFilters[snakeKey] = values;
+      });
+
       // Use POST bridge for SELECT to bypass WAF
-      const payload = {
+      const payload: any = {
         action: 'select',
         table: this.table,
-        filters: processedFilters
+        filters: processedFilters,
+        inFilters: processedInFilters
       };
+
+      if (this.orderBy) {
+        payload.order = {
+          column: this.orderBy.column.replace(/[A-Z]/g, $1 => `_${$1.toLowerCase()}`),
+          ascending: this.orderBy.ascending
+        };
+      }
 
       const p = b64EncodeUnicode(JSON.stringify(payload));
 
@@ -179,6 +200,7 @@ class MutationQueryBuilder {
   private action: 'update' | 'delete';
   private data?: any;
   private filters: Record<string, any> = {};
+  private inFilters: Record<string, any[]> = {};
 
   constructor(table: string, action: 'update' | 'delete', data?: any) {
     this.table = table;
@@ -188,6 +210,11 @@ class MutationQueryBuilder {
 
   eq(column: string, value: any) {
     this.filters[column] = value;
+    return this;
+  }
+
+  in(column: string, values: any[]) {
+    this.inFilters[column] = values;
     return this;
   }
 
@@ -204,10 +231,17 @@ class MutationQueryBuilder {
         else processedFilters[snakeKey] = value;
       });
 
+      const processedInFilters: Record<string, any[]> = {};
+      Object.entries(this.inFilters).forEach(([key, values]) => {
+        const snakeKey = key.replace(/[A-Z]/g, $1 => `_${$1.toLowerCase()}`);
+        processedInFilters[snakeKey] = values;
+      });
+
       const payload: any = { 
         action: this.action, 
         table: this.table, 
-        filters: processedFilters 
+        filters: processedFilters,
+        inFilters: processedInFilters
       };
       if (snakeData) payload.data = snakeData;
 

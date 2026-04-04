@@ -161,13 +161,36 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
     
     if (action === 'select') {
       let query = `SELECT * FROM ??`;
-      const params = [table];
+      const params: any[] = [table];
       
+      const whereClauses: string[] = [];
       if (filters && Object.keys(filters).length > 0) {
-        const whereClauses = Object.keys(filters).map(k => `?? = ?`);
-        const whereParams = Object.entries(filters).flatMap(([k, v]) => [k, v]);
+        whereClauses.push(...Object.keys(filters).map(k => `?? = ?`));
+        params.push(...Object.entries(filters).flatMap(([k, v]) => [k, v]));
+      }
+
+      if (parsed.inFilters && Object.keys(parsed.inFilters).length > 0) {
+        Object.entries(parsed.inFilters).forEach(([k, v]) => {
+          if (Array.isArray(v) && v.length > 0) {
+            whereClauses.push(`?? IN (?)`);
+            params.push(k, v);
+          }
+        });
+      }
+
+      if (whereClauses.length > 0) {
         query += ` WHERE ${whereClauses.join(' AND ')}`;
-        params.push(...whereParams);
+      }
+
+      if (parsed.order) {
+        const { column, ascending } = parsed.order;
+        query += ` ORDER BY ?? ${ascending ? 'ASC' : 'DESC'}`;
+        params.push(column);
+      } else {
+        const tablesWithCreatedAt = ['documents', 'leave_requests', 'attendance', 'director_events', 'academic_test_scores', 'savings_transactions'];
+        if (tablesWithCreatedAt.includes(table)) {
+          query += ` ORDER BY created_at DESC`;
+        }
       }
       
       const [rows]: any = await pool.query(query, params);
@@ -219,13 +242,30 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
     if (action === 'delete') {
       if (id) {
         await pool.query(`DELETE FROM ?? WHERE ?? = ?`, [table, pk, id]);
-      } else if (filters) {
-        const whereClauses = Object.keys(filters).map(k => `?? = ?`);
-        const whereParams = Object.entries(filters).flatMap(([k, v]) => [k, v]);
-        const sql = `DELETE FROM ?? WHERE ${whereClauses.join(' AND ')}`;
-        await pool.query(sql, [table, ...whereParams]);
       } else {
-        return res.status(400).json({ error: 'Missing ID or filters for delete' });
+        const whereClauses: string[] = [];
+        const params: any[] = [table];
+
+        if (filters && Object.keys(filters).length > 0) {
+          whereClauses.push(...Object.keys(filters).map(k => `?? = ?`));
+          params.push(...Object.entries(filters).flatMap(([k, v]) => [k, v]));
+        }
+
+        if (parsed.inFilters && Object.keys(parsed.inFilters).length > 0) {
+          Object.entries(parsed.inFilters).forEach(([k, v]) => {
+            if (Array.isArray(v) && v.length > 0) {
+              whereClauses.push(`?? IN (?)`);
+              params.push(k, v);
+            }
+          });
+        }
+
+        if (whereClauses.length > 0) {
+          const sql = `DELETE FROM ?? WHERE ${whereClauses.join(' AND ')}`;
+          await pool.query(sql, params);
+        } else {
+          return res.status(400).json({ error: 'Missing ID or filters for delete' });
+        }
       }
       return res.json({ success: true });
     }
@@ -259,13 +299,30 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
     if (action === 'update') {
       if (id) {
         await pool.query(`UPDATE ?? SET ? WHERE ?? = ?`, [table, data, pk, id]);
-      } else if (filters) {
-        const whereClauses = Object.keys(filters).map(k => `?? = ?`);
-        const whereParams = Object.entries(filters).flatMap(([k, v]) => [k, v]);
-        const sql = `UPDATE ?? SET ? WHERE ${whereClauses.join(' AND ')}`;
-        await pool.query(sql, [table, data, ...whereParams]);
       } else {
-        return res.status(400).json({ error: 'Missing ID or filters for update' });
+        const whereClauses: string[] = [];
+        const params: any[] = [table, data];
+
+        if (filters && Object.keys(filters).length > 0) {
+          whereClauses.push(...Object.keys(filters).map(k => `?? = ?`));
+          params.push(...Object.entries(filters).flatMap(([k, v]) => [k, v]));
+        }
+
+        if (parsed.inFilters && Object.keys(parsed.inFilters).length > 0) {
+          Object.entries(parsed.inFilters).forEach(([k, v]) => {
+            if (Array.isArray(v) && v.length > 0) {
+              whereClauses.push(`?? IN (?)`);
+              params.push(k, v);
+            }
+          });
+        }
+
+        if (whereClauses.length > 0) {
+          const sql = `UPDATE ?? SET ? WHERE ${whereClauses.join(' AND ')}`;
+          await pool.query(sql, params);
+        } else {
+          return res.status(400).json({ error: 'Missing ID or filters for update' });
+        }
       }
       return res.json({ success: true });
     }
