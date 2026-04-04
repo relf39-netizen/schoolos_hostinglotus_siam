@@ -171,7 +171,20 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
       }
       
       const [rows]: any = await pool.query(query, params);
-      return res.json({ success: true, data: rows });
+      
+      // Parse JSON fields for select
+      const jsonFieldsMap: any = {
+        profiles: ['roles', 'assigned_classes'],
+        school_configs: ['internal_departments', 'external_agencies'],
+        academic_enrollments: ['levels'],
+        academic_test_scores: ['results'],
+        documents: ['target_teachers', 'acknowledged_by', 'attachments'],
+        attendance: ['coordinate']
+      };
+      const fieldsToParse = jsonFieldsMap[table] || [];
+      const processedRows = rows.map((row: any) => parseJsonFields(row, fieldsToParse));
+      
+      return res.json({ success: true, data: processedRows });
     }
 
     if (action === 'upsert') {
