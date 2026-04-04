@@ -272,8 +272,8 @@ export const supabase: any = {
 
             const b64Response = await fetch(`${window.location.origin}/api/v1/bridge`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ p })
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: `p=${encodeURIComponent(p)}`
             });
 
             const b64Text = await b64Response.text();

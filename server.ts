@@ -189,8 +189,31 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
 
     if (action === 'upsert') {
       const items = Array.isArray(data) ? data : [data];
-      const results = await performBulkUpsert(table, items);
-      return res.json({ success: true, data: results });
+      const jsonFieldsMap: any = {
+        profiles: ['roles', 'assigned_classes'],
+        school_configs: ['internal_departments', 'external_agencies'],
+        academic_enrollments: ['levels'],
+        academic_test_scores: ['results'],
+        documents: ['target_teachers', 'acknowledged_by', 'attachments'],
+        attendance: ['coordinate']
+      };
+      const fieldsToSerialize = jsonFieldsMap[table] || [];
+
+      for (const item of items) {
+        const processedData = { ...item };
+        fieldsToSerialize.forEach(field => {
+          if (processedData[field] && typeof processedData[field] !== 'string') processedData[field] = JSON.stringify(processedData[field]);
+        });
+        
+        const keys = Object.keys(processedData);
+        const values = Object.values(processedData).map(v => (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v);
+        const placeholders = keys.map(() => '?').join(', ');
+        const updateClause = keys.map(k => `?? = VALUES(??)`).join(', ');
+        const updateParams = keys.flatMap(k => [k, k]);
+        const sql = `INSERT INTO ?? (??) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateClause}`;
+        await pool.query(sql, [table, keys, ...values, ...updateParams]);
+      }
+      return res.json({ success: true });
     }
 
     if (action === 'delete') {
@@ -208,8 +231,29 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
     }
 
     if (action === 'insert') {
-      const [result]: any = await pool.query(`INSERT INTO ?? SET ?`, [table, data]);
-      return res.json({ success: true, id: result.insertId || data.id });
+      const items = Array.isArray(data) ? data : [data];
+      const results = [];
+      const jsonFieldsMap: any = {
+        profiles: ['roles', 'assigned_classes'],
+        school_configs: ['internal_departments', 'external_agencies'],
+        academic_enrollments: ['levels'],
+        academic_test_scores: ['results'],
+        documents: ['target_teachers', 'acknowledged_by', 'attachments'],
+        attendance: ['coordinate']
+      };
+      const fieldsToSerialize = jsonFieldsMap[table] || [];
+      const uuidTables = ['class_rooms', 'students', 'student_savings', 'academic_years', 'student_attendance', 'student_health_records', 'director_events', 'finance_accounts', 'finance_transactions'];
+
+      for (const item of items) {
+        const processedData = { ...item };
+        if (uuidTables.includes(table) && !processedData.id) processedData.id = uuidv4();
+        fieldsToSerialize.forEach(field => {
+          if (processedData[field] && typeof processedData[field] !== 'string') processedData[field] = JSON.stringify(processedData[field]);
+        });
+        const [result]: any = await pool.query(`INSERT INTO ?? SET ?`, [table, processedData]);
+        results.push({ id: result.insertId || processedData.id, ...item });
+      }
+      return res.json({ success: true, data: Array.isArray(data) ? results : results[0] });
     }
 
     if (action === 'update') {
@@ -571,6 +615,108 @@ app.post('/api/maintenance/fix-schema', async (req, res) => {
       `);
 
       console.log('[MAINTENANCE] Schema fix completed');
+      // Fix academic_years table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS academic_years (
+          id VARCHAR(36) PRIMARY KEY,
+          school_id VARCHAR(50) NOT NULL,
+          year VARCHAR(10) NOT NULL,
+          is_current TINYINT(1) DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_school_year (school_id, year)
+        ) ENGINE=InnoDB
+      `);
+
+      // Fix class_rooms table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS class_rooms (
+          id VARCHAR(36) PRIMARY KEY,
+          school_id VARCHAR(50) NOT NULL,
+          name VARCHAR(100) NOT NULL,
+          academic_year VARCHAR(10),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_school_class (school_id, name)
+        ) ENGINE=InnoDB
+      `);
+
+      // Fix students table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS students (
+          id VARCHAR(36) PRIMARY KEY,
+          school_id VARCHAR(50) NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          current_class VARCHAR(100) NOT NULL,
+          academic_year VARCHAR(10),
+          is_active TINYINT(1) DEFAULT 1,
+          photo_url TEXT,
+          address TEXT,
+          phone_number VARCHAR(50),
+          father_name VARCHAR(255),
+          mother_name VARCHAR(255),
+          guardian_name VARCHAR(255),
+          medical_conditions TEXT,
+          family_annual_income DOUBLE,
+          lat DOUBLE,
+          lng DOUBLE,
+          is_alumni TINYINT(1) DEFAULT 0,
+          graduation_year VARCHAR(10),
+          batch_number VARCHAR(50),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_school_student (school_id, name),
+          INDEX idx_class (current_class)
+        ) ENGINE=InnoDB
+      `);
+
+      // Fix student_savings table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS student_savings (
+          id VARCHAR(36) PRIMARY KEY,
+          student_id VARCHAR(36) NOT NULL,
+          school_id VARCHAR(50) NOT NULL,
+          amount DOUBLE NOT NULL,
+          type ENUM('DEPOSIT', 'WITHDRAWAL') NOT NULL,
+          academic_year VARCHAR(10),
+          created_by VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          edited_at TIMESTAMP NULL,
+          edited_by VARCHAR(100),
+          edit_reason TEXT,
+          INDEX idx_student_savings (student_id),
+          INDEX idx_school_savings (school_id)
+        ) ENGINE=InnoDB
+      `);
+
+      // Fix student_attendance table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS student_attendance (
+          id VARCHAR(36) PRIMARY KEY,
+          school_id VARCHAR(50) NOT NULL,
+          student_id VARCHAR(36) NOT NULL,
+          date DATE NOT NULL,
+          status ENUM('Present', 'Late', 'Sick', 'Absent') NOT NULL,
+          academic_year VARCHAR(10) NOT NULL,
+          created_by VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY idx_student_date (student_id, date)
+        ) ENGINE=InnoDB
+      `);
+
+      // Fix student_support_records table
+      await connection.query(`
+        CREATE TABLE IF NOT EXISTS student_support_records (
+          id VARCHAR(36) PRIMARY KEY,
+          student_id VARCHAR(36) NOT NULL,
+          school_id VARCHAR(50) NOT NULL,
+          type ENUM('HOME_VISIT', 'SDQ_TEACHER', 'SDQ_STUDENT', 'SDQ_PARENT', 'SCREENING', 'EQ') NOT NULL,
+          data LONGTEXT NOT NULL,
+          academic_year VARCHAR(10) NOT NULL,
+          recorded_by VARCHAR(100),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_student_support (student_id, type)
+        ) ENGINE=InnoDB
+      `);
+
       res.json({ success: true, message: 'Database schema updated successfully' });
     } finally {
       connection.release();
