@@ -210,6 +210,7 @@ app.all(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge',
     let order = parsed.o || parsed.order;
     let limit = parsed.l || parsed.limit;
     let count = parsed.n || parsed.count;
+    let salt = parsed.x;
     let pk = parsed.pk || 'id';
     
     // De-obfuscate table name
