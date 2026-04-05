@@ -56,7 +56,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         const fetchSuperAdmin = async () => {
             const client = supabase;
             if (isSupabaseConfigured && client) {
-                const { data } = await client.from('admin_accounts').select('*').limit(1).maybeSingle();
+                const { data } = await client.from('super_admins').select('*').limit(1).maybeSingle();
                 if (data) {
                     setSuperAdminData({ username: data.username, password: data.password });
                     setOldUsername(data.username);
@@ -102,9 +102,9 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         setIsSavingAccount(true);
         try {
             if (superAdminData.username !== oldUsername) {
-                await client.from('admin_accounts').delete().eq('username', oldUsername);
+                await client.from('super_admins').delete().eq('username', oldUsername);
             }
-            const { error } = await client.from('admin_accounts').upsert({
+            const { error } = await client.from('super_admins').upsert({
                 username: superAdminData.username,
                 password: superAdminData.password
             });
@@ -144,15 +144,16 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
     const handleToggleTeacherAdmin = async (teacher: Teacher) => {
         if (!isSupabaseConfigured || !supabase) return;
-        const hasAdmin = teacher.roles.includes('SYSTEM_ADMIN');
+        const roles = teacher.roles || [];
+        const hasAdmin = roles.includes('SYSTEM_ADMIN');
         let newRoles: TeacherRole[] = hasAdmin 
-            ? teacher.roles.filter(r => r !== 'SYSTEM_ADMIN') 
-            : [...teacher.roles, 'SYSTEM_ADMIN'];
+            ? roles.filter(r => r !== 'SYSTEM_ADMIN') 
+            : [...roles, 'SYSTEM_ADMIN'];
         
         if (!confirm(`ยืนยันการ${hasAdmin ? 'ถอนสิทธิ์' : 'แต่งตั้ง'}แอดมิน: ${teacher.name}?`)) return;
 
         setIsUpdatingTeacher(teacher.id);
-        const { error } = await supabase.from('profiles').update({ roles: newRoles }).eq('id', teacher.id);
+        const { error } = await supabase.from('profiles').update({ roles: JSON.stringify(newRoles) }).eq('id', teacher.id);
         if (!error) await onUpdateTeacher({ ...teacher, roles: newRoles });
         setIsUpdatingTeacher(null);
     };
@@ -656,9 +657,9 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                                                 <td className="p-4 px-6 font-bold text-slate-500">{t.position}</td>
                                                 <td className="p-4 px-6 text-center"><div className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase ${t.isSuspended ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>{t.isSuspended ? 'ระงับการใช้งาน' : 'ปกติ'}</div></td>
                                                 <td className="p-4 px-6 text-right">
-                                                    <button onClick={() => handleToggleTeacherAdmin(t)} className={`px-4 py-1.5 rounded-lg transition-all border-2 flex items-center gap-2 text-[10px] font-black uppercase ml-auto ${t.roles.includes('SYSTEM_ADMIN') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-100 hover:bg-indigo-50'}`}>
-                                                        {isUpdatingTeacher === t.id ? <Loader2 className="animate-spin" size={12}/> : (t.roles.includes('SYSTEM_ADMIN') ? <UserMinus size={12}/> : <ShieldPlus size={12}/>)}
-                                                        {t.roles.includes('SYSTEM_ADMIN') ? 'ถอนสิทธิ์แอดมิน' : 'ตั้งเป็นแอดมิน'}
+                                                    <button onClick={() => handleToggleTeacherAdmin(t)} className={`px-4 py-1.5 rounded-lg transition-all border-2 flex items-center gap-2 text-[10px] font-black uppercase ml-auto ${(t.roles || []).includes('SYSTEM_ADMIN') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-700 border-indigo-100 hover:bg-indigo-50'}`}>
+                                                        {isUpdatingTeacher === t.id ? <Loader2 className="animate-spin" size={12}/> : ((t.roles || []).includes('SYSTEM_ADMIN') ? <UserMinus size={12}/> : <ShieldPlus size={12}/>)}
+                                                        {(t.roles || []).includes('SYSTEM_ADMIN') ? 'ถอนสิทธิ์แอดมิน' : 'ตั้งเป็นแอดมิน'}
                                                     </button>
                                                 </td>
                                             </tr>

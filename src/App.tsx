@@ -86,7 +86,7 @@ const App: React.FC = () => {
                         ...p,
                         roles,
                         isApproved: p.isApproved !== false,
-                        isActingDirector: roles.includes('ACTING_DIRECTOR'),
+                        isActingDirector: (Array.isArray(roles) ? roles : []).includes('ACTING_DIRECTOR'),
                         isFirstLogin: false
                     };
                 });
@@ -141,7 +141,7 @@ const App: React.FC = () => {
                                 ...p,
                                 roles,
                                 isApproved: p.isApproved !== false,
-                                isActingDirector: roles.includes('ACTING_DIRECTOR')
+                                isActingDirector: (Array.isArray(roles) ? roles : []).includes('ACTING_DIRECTOR')
                             } as any;
                         });
                         setAllTeachers(updatedList);
@@ -282,8 +282,8 @@ const App: React.FC = () => {
         const client = supabase;
         if (!client) return;
         const finalRoles = t.isActingDirector 
-            ? [...(t.roles || []).filter(r => r !== 'ACTING_DIRECTOR'), 'ACTING_DIRECTOR']
-            : (t.roles || []).filter(r => r !== 'ACTING_DIRECTOR');
+            ? [...(Array.isArray(t.roles) ? t.roles : []).filter(r => r !== 'ACTING_DIRECTOR'), 'ACTING_DIRECTOR']
+            : (Array.isArray(t.roles) ? t.roles : []).filter(r => r !== 'ACTING_DIRECTOR');
 
         const { error } = await client.from('profiles').update({
             name: t.name, 
@@ -571,8 +571,8 @@ const App: React.FC = () => {
                                             const client = supabase; 
                                             if(!client) return;
                                             const finalRoles = t.isActingDirector 
-                                                ? [...(t.roles || []).filter((r: any) => r !== 'ACTING_DIRECTOR'), 'ACTING_DIRECTOR']
-                                                : (t.roles || []).filter((r: any) => r !== 'ACTING_DIRECTOR');
+                                                ? [...(Array.isArray(t.roles) ? t.roles : []).filter((r: any) => r !== 'ACTING_DIRECTOR'), 'ACTING_DIRECTOR']
+                                                : (Array.isArray(t.roles) ? t.roles : []).filter((r: any) => r !== 'ACTING_DIRECTOR');
 
                                             const { error } = await client.from('profiles').insert([{ 
                                                 id: t.id,

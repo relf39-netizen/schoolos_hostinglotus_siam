@@ -1005,7 +1005,7 @@ function setTelegramWebhook() {
         setIsSubmittingUser(true);
         const teacherData = { 
             ...editForm, 
-            roles: editForm.roles || ['TEACHER'], 
+            roles: Array.isArray(editForm.roles) ? editForm.roles : (editForm.roles ? [editForm.roles] : ['TEACHER']),
             schoolId: currentSchool.id, 
             isApproved: true,
             assignedClasses: editForm.assignedClasses || []
@@ -1042,9 +1042,9 @@ function setTelegramWebhook() {
         const currentRoles = editForm.roles || [];
         setEditForm({ 
             ...editForm, 
-            roles: currentRoles.includes(role) 
-                ? currentRoles.filter(r => r !== role) 
-                : [...currentRoles, role] 
+            roles: (currentRoles || []).includes(role) 
+                ? (currentRoles || []).filter(r => r !== role) 
+                : [...(currentRoles || []), role] 
         });
     };
 
@@ -1122,7 +1122,7 @@ function setTelegramWebhook() {
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap gap-1.5">
-                                        {Array.isArray(t.roles) && t.roles.map(role => (
+                                        {(t.roles || []).map(role => (
                                             <span key={role} className="px-2 py-0.5 bg-white border border-slate-100 text-slate-500 rounded-md text-[9px] font-bold uppercase tracking-tighter">
                                                 {AVAILABLE_ROLES.find(r => r.id === role)?.label.split(' ')[0] || role}
                                             </span>
