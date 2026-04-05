@@ -75,6 +75,31 @@ const parseJsonFields = (row, fields) => {
 
 // --- API Endpoints ---
 
+// Table name reverse map for obfuscated names
+const tableReverseMap = {
+  'p_data': 'profiles',
+  's_data': 'students',
+  'sa_data': 'student_attendance',
+  'd_data': 'documents',
+  'sc_data': 'schools',
+  'lr_data': 'leave_requests',
+  'de_data': 'director_events',
+  'ss_data': 'student_savings',
+  'cr_data': 'class_rooms',
+  'ay_data': 'academic_years',
+  'su_data': 'super_admins',
+  'at_data': 'attendance',
+  'ats_data': 'academic_test_scores',
+  'st_data': 'savings_transactions',
+  'fa_data': 'finance_accounts',
+  'ft_data': 'finance_transactions',
+  'shr_data': 'student_health_records'
+};
+
+function getRealTable(table) {
+  return tableReverseMap[table] || table;
+}
+
 // DATA SYNC (Base64 fallback for strict firewalls)
 app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'], async (req, res) => {
   console.log(`[Data Sync API] Incoming request from ${req.ip}`);
@@ -101,7 +126,11 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
       return res.status(400).json({ error: 'Invalid JSON in payload' });
     }
 
-    const { action, table, data, id, pk = 'id', onConflict, filters } = parsed;
+    let { action, table, data, id, pk = 'id', onConflict, filters } = parsed;
+    
+    // De-obfuscate table name
+    table = getRealTable(table);
+    
     console.log(`[Data Sync API] ${action.toUpperCase()} on ${table}`, { id, pk });
     
     if (action === 'select') {

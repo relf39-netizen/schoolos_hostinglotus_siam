@@ -152,7 +152,14 @@ const tableReverseMap: Record<string, string> = {
   'de_data': 'director_events',
   'ss_data': 'student_savings',
   'cr_data': 'class_rooms',
-  'ay_data': 'academic_years'
+  'ay_data': 'academic_years',
+  'su_data': 'super_admins',
+  'at_data': 'attendance',
+  'ats_data': 'academic_test_scores',
+  'st_data': 'savings_transactions',
+  'fa_data': 'finance_accounts',
+  'ft_data': 'finance_transactions',
+  'shr_data': 'student_health_records'
 };
 
 function getRealTable(table: string): string {

@@ -14,7 +14,14 @@ const tableMap: Record<string, string> = {
   'director_events': 'de_data',
   'student_savings': 'ss_data',
   'class_rooms': 'cr_data',
-  'academic_years': 'ay_data'
+  'academic_years': 'ay_data',
+  'super_admins': 'su_data',
+  'attendance': 'at_data',
+  'academic_test_scores': 'ats_data',
+  'savings_transactions': 'st_data',
+  'finance_accounts': 'fa_data',
+  'finance_transactions': 'ft_data',
+  'student_health_records': 'shr_data'
 };
 
 function getObfuscatedTable(table: string): string {
