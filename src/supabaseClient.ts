@@ -143,7 +143,8 @@ class QueryBuilder {
             i: processedInFilters,
             o: this.orderCol ? { c: this.orderCol, a: this.orderAsc } : null,
             l: this.limitVal,
-            n: this.countOption
+            n: this.countOption,
+            x: Math.random().toString(36).substring(7)
         };
 
         const p = b64EncodeUnicode(JSON.stringify(payload));
@@ -248,7 +249,8 @@ class MutationQueryBuilder {
         a: this.action, 
         t: getObfuscatedTable(this.table), 
         f: processedFilters,
-        i: processedInFilters
+        i: processedInFilters,
+        x: Math.random().toString(36).substring(7)
       };
       
       if (this.action === 'update') {
@@ -347,7 +349,7 @@ export const supabase = {
         insert: (data: any | any[]) => {
             const execute = async () => {
                 const processedData = toSnakeCase(data);
-                const payload = { a: 'insert', t: getObfuscatedTable(table), d: processedData };
+                const payload = { a: 'insert', t: getObfuscatedTable(table), d: processedData, x: Math.random().toString(36).substring(7) };
                 const p = b64EncodeUnicode(JSON.stringify(payload));
                 
                 const endpoints = [
@@ -401,7 +403,7 @@ export const supabase = {
         upsert: (data: any | any[], { onConflict }: { onConflict?: string } = {}) => {
             const execute = async () => {
                 const processedData = toSnakeCase(data);
-                const payload = { a: 'upsert', t: getObfuscatedTable(table), d: processedData, onConflict };
+                const payload = { a: 'upsert', t: getObfuscatedTable(table), d: processedData, onConflict, x: Math.random().toString(36).substring(7) };
                 const p = b64EncodeUnicode(JSON.stringify(payload));
                 
                 const endpoints = [
