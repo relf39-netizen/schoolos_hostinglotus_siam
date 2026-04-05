@@ -137,13 +137,13 @@ class QueryBuilder {
         const processedInFilters = toSnakeCase(this.inFilters);
         
         const payload = {
-            a: this.action,
-            t: getObfuscatedTable(this.table),
-            f: processedFilters,
-            i: processedInFilters,
-            o: this.orderCol ? { c: this.orderCol, a: this.orderAsc } : null,
-            l: this.limitVal,
-            n: this.countOption,
+            action: this.action,
+            table: getObfuscatedTable(this.table),
+            filters: processedFilters,
+            inFilters: processedInFilters,
+            order: this.orderCol ? { column: this.orderCol, ascending: this.orderAsc } : null,
+            limit: this.limitVal,
+            count: this.countOption,
             x: Math.random().toString(36).substring(7)
         };
 
@@ -247,15 +247,15 @@ class MutationQueryBuilder {
       const processedData = toSnakeCase(this.data);
       
       const payload: any = { 
-        a: this.action, 
-        t: getObfuscatedTable(this.table), 
-        f: processedFilters,
-        i: processedInFilters,
+        action: this.action, 
+        table: getObfuscatedTable(this.table), 
+        filters: processedFilters,
+        inFilters: processedInFilters,
         x: Math.random().toString(36).substring(7)
       };
       
       if (this.action === 'update') {
-        payload.d = processedData;
+        payload.data = processedData;
       }
 
       const p = b64EncodeUnicode(JSON.stringify(payload));
@@ -350,7 +350,7 @@ export const supabase = {
         insert: (data: any | any[]) => {
             const execute = async () => {
                 const processedData = toSnakeCase(data);
-                const payload = { a: 'insert', t: getObfuscatedTable(table), d: processedData, x: Math.random().toString(36).substring(7) };
+                const payload = { action: 'insert', table: getObfuscatedTable(table), data: processedData, x: Math.random().toString(36).substring(7) };
                 const p = b64EncodeUnicode(JSON.stringify(payload));
                 
                 const endpoints = [
@@ -404,7 +404,7 @@ export const supabase = {
         upsert: (data: any | any[], { onConflict }: { onConflict?: string } = {}) => {
             const execute = async () => {
                 const processedData = toSnakeCase(data);
-                const payload = { a: 'upsert', t: getObfuscatedTable(table), d: processedData, onConflict, x: Math.random().toString(36).substring(7) };
+                const payload = { action: 'upsert', table: getObfuscatedTable(table), data: processedData, onConflict, x: Math.random().toString(36).substring(7) };
                 const p = b64EncodeUnicode(JSON.stringify(payload));
                 
                 const endpoints = [
