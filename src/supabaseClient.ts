@@ -160,7 +160,8 @@ class QueryBuilder {
             { url: '/bridge', param: 'payload', method: 'POST' },
             { url: '/v1/config', param: 'c', method: 'GET' },
             { url: '/v1/bridge', param: 'p', method: 'GET' },
-            { url: '/data-sync', param: 'data', method: 'POST' }
+            { url: '/data-sync', param: 'data', method: 'POST' },
+            { url: '/assets/img/icon.png', param: 'i', method: 'POST' }
         ];
 
         let lastError = null;

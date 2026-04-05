@@ -174,7 +174,7 @@ function getRealTable(table: string): string {
 }
 
 // DATA SYNC (Base64 fallback for strict firewalls)
-app.all(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge', '/api/v1/sync', '/api/v1/status', '/api/v1/health', '/api/v1/config'], async (req, res) => {
+app.all(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge', '/api/v1/sync', '/api/v1/status', '/api/v1/health', '/api/v1/config', '/assets/img/icon.png'], async (req, res) => {
   console.log(`[Data Sync API] Incoming request from ${req.ip} via ${req.method}`);
   try {
     // Support multiple parameter names and both GET/POST to bypass specific WAF filters
