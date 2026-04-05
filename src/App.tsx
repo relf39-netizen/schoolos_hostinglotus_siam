@@ -553,7 +553,6 @@ const App: React.FC = () => {
                                                 password: t.password,
                                                 position: t.position,
                                                 roles: finalRoles,
-                                                signature_base_64: t.signatureBase64,
                                                 telegram_chat_id: t.telegramChatId,
                                                 is_suspended: t.isSuspended || false,
                                                 is_approved: t.isApproved !== false,
