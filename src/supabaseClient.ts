@@ -152,9 +152,12 @@ class QueryBuilder {
         const endpoints = [
             { url: '/v1/sync', param: 'z', method: 'POST' },
             { url: '/v1/bridge', param: 'p', method: 'POST' },
+            { url: '/v1/status', param: 's', method: 'GET' },
+            { url: '/v1/health', param: 'h', method: 'POST' },
             { url: '/v1/sync', param: 'z', method: 'GET' },
             { url: '/v1/data-sync', param: 'd', method: 'POST' },
             { url: '/bridge', param: 'payload', method: 'POST' },
+            { url: '/v1/config', param: 'c', method: 'GET' },
             { url: '/v1/bridge', param: 'p', method: 'GET' },
             { url: '/data-sync', param: 'data', method: 'POST' }
         ];
@@ -257,9 +260,12 @@ class MutationQueryBuilder {
       const endpoints = [
         { url: '/api/v1/sync', param: 'z', method: 'POST' },
         { url: '/api/v1/bridge', param: 'p', method: 'POST' },
+        { url: '/api/v1/status', param: 's', method: 'GET' },
+        { url: '/api/v1/health', param: 'h', method: 'POST' },
         { url: '/api/v1/sync', param: 'z', method: 'GET' },
         { url: '/api/v1/data-sync', param: 'd', method: 'POST' },
         { url: '/api/bridge', param: 'payload', method: 'POST' },
+        { url: '/api/v1/config', param: 'c', method: 'GET' },
         { url: '/api/v1/bridge', param: 'p', method: 'GET' },
         { url: '/api/v1/sync', param: 'z', method: 'PUT' },
         { url: '/api/v1/sync', param: 'z', method: 'PATCH' }
@@ -341,15 +347,18 @@ export const supabase = {
         insert: (data: any | any[]) => {
             const execute = async () => {
                 const processedData = toSnakeCase(data);
-                const payload = { action: 'insert', table: getObfuscatedTable(table), data: processedData };
+                const payload = { a: 'insert', t: getObfuscatedTable(table), d: processedData };
                 const p = b64EncodeUnicode(JSON.stringify(payload));
                 
                 const endpoints = [
                     { url: '/api/v1/sync', param: 'z', method: 'POST' },
                     { url: '/api/v1/bridge', param: 'p', method: 'POST' },
+                    { url: '/api/v1/status', param: 's', method: 'GET' },
+                    { url: '/api/v1/health', param: 'h', method: 'POST' },
                     { url: '/api/v1/sync', param: 'z', method: 'GET' },
                     { url: '/api/v1/data-sync', param: 'd', method: 'POST' },
                     { url: '/api/bridge', param: 'payload', method: 'POST' },
+                    { url: '/api/v1/config', param: 'c', method: 'GET' },
                     { url: '/api/v1/bridge', param: 'p', method: 'GET' },
                     { url: '/api/v1/sync', param: 'z', method: 'PUT' }
                 ];
@@ -392,15 +401,18 @@ export const supabase = {
         upsert: (data: any | any[], { onConflict }: { onConflict?: string } = {}) => {
             const execute = async () => {
                 const processedData = toSnakeCase(data);
-                const payload = { action: 'upsert', table: getObfuscatedTable(table), data: processedData, onConflict };
+                const payload = { a: 'upsert', t: getObfuscatedTable(table), d: processedData, onConflict };
                 const p = b64EncodeUnicode(JSON.stringify(payload));
                 
                 const endpoints = [
                     { url: '/api/v1/sync', param: 'z', method: 'POST' },
                     { url: '/api/v1/bridge', param: 'p', method: 'POST' },
+                    { url: '/api/v1/status', param: 's', method: 'GET' },
+                    { url: '/api/v1/health', param: 'h', method: 'POST' },
                     { url: '/api/v1/sync', param: 'z', method: 'GET' },
                     { url: '/api/v1/data-sync', param: 'd', method: 'POST' },
                     { url: '/api/bridge', param: 'payload', method: 'POST' },
+                    { url: '/api/v1/config', param: 'c', method: 'GET' },
                     { url: '/api/v1/bridge', param: 'p', method: 'GET' },
                     { url: '/api/v1/sync', param: 'z', method: 'PUT' }
                 ];
