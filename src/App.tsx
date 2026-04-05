@@ -71,20 +71,22 @@ const App: React.FC = () => {
             if (profilesError) console.error("App: Profiles Fetch Error:", profilesError);
             if (profilesData) {
                 console.log(`App: Fetched ${profilesData.length} profiles`);
-                const mappedTeachers: Teacher[] = profilesData.map((p: any) => {
-                    let roles = p.roles;
-                    if (typeof roles === 'string') {
-                        try { roles = JSON.parse(roles); } catch(e) { roles = []; }
-                    }
-                    if (!Array.isArray(roles)) roles = [];
-                    return {
-                        ...p,
-                        roles,
-                        isApproved: p.isApproved !== false,
-                        isActingDirector: roles.includes('ACTING_DIRECTOR') || false,
-                        isFirstLogin: false
-                    };
-                });
+                const mappedTeachers: Teacher[] = profilesData.map((p: any) => ({
+                    id: p.id,
+                    schoolId: p.school_id,
+                    name: p.name,
+                    password: p.password,
+                    position: p.position,
+                    roles: Array.isArray(p.roles) ? p.roles : (p.roles ? JSON.parse(p.roles) : []),
+                    signatureBase64: p.signature_base_64,
+                    telegramChatId: p.telegram_chat_id,
+                    isSuspended: p.is_suspended || false,
+                    isApproved: p.is_approved !== false,
+                    assignedClasses: Array.isArray(p.assigned_classes) ? p.assigned_classes : (p.assigned_classes ? JSON.parse(p.assigned_classes) : []),
+                    createdAt: p.created_at,
+                    isActingDirector: (Array.isArray(p.roles) ? p.roles : (p.roles ? JSON.parse(p.roles) : []))?.includes('ACTING_DIRECTOR') || false,
+                    isFirstLogin: false
+                }));
                 setAllTeachers(mappedTeachers);
                 
                 const storedSession = localStorage.getItem(SESSION_KEY);
@@ -121,19 +123,21 @@ const App: React.FC = () => {
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async (payload: any) => {
                     const { data } = await client.from('profiles').select('*');
                     if (data) {
-                        const updatedList: Teacher[] = data.map((p: any) => {
-                            let roles = p.roles;
-                            if (typeof roles === 'string') {
-                                try { roles = JSON.parse(roles); } catch(e) { roles = []; }
-                            }
-                            if (!Array.isArray(roles)) roles = [];
-                            return {
-                                ...p,
-                                roles,
-                                isApproved: p.isApproved !== false,
-                                isActingDirector: roles.includes('ACTING_DIRECTOR') || false
-                            };
-                        });
+                        const updatedList: Teacher[] = data.map((p: any) => ({
+                            id: p.id,
+                            schoolId: p.school_id,
+                            name: p.name,
+                            password: p.password,
+                            position: p.position,
+                            roles: Array.isArray(p.roles) ? p.roles : (p.roles ? JSON.parse(p.roles) : []),
+                            signatureBase64: p.signature_base_64,
+                            telegramChatId: p.telegram_chat_id,
+                            isSuspended: p.is_suspended || false,
+                            isApproved: p.is_approved !== false,
+                            assignedClasses: Array.isArray(p.assigned_classes) ? p.assigned_classes : (p.assigned_classes ? JSON.parse(p.assigned_classes) : []),
+                            createdAt: p.created_at,
+                            isActingDirector: (Array.isArray(p.roles) ? p.roles : (p.roles ? JSON.parse(p.roles) : []))?.includes('ACTING_DIRECTOR') || false
+                        } as any));
                         setAllTeachers(updatedList);
 
                         const sessionStr = localStorage.getItem(SESSION_KEY);
@@ -569,6 +573,7 @@ const App: React.FC = () => {
                                                 password: t.password,
                                                 position: t.position,
                                                 roles: finalRoles,
+                                                signature_base_64: t.signatureBase64,
                                                 telegram_chat_id: t.telegramChatId,
                                                 is_suspended: t.isSuspended || false,
                                                 is_approved: t.isApproved !== false,
