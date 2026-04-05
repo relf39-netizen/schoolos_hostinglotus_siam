@@ -72,19 +72,9 @@ const App: React.FC = () => {
             if (profilesData) {
                 console.log(`App: Fetched ${profilesData.length} profiles`);
                 const mappedTeachers: Teacher[] = profilesData.map((p: any) => ({
-                    id: p.id,
-                    schoolId: p.school_id,
-                    name: p.name,
-                    password: p.password,
-                    position: p.position,
-                    roles: Array.isArray(p.roles) ? p.roles : (p.roles ? JSON.parse(p.roles) : []),
-                    signatureBase64: p.signature_base_64,
-                    telegramChatId: p.telegram_chat_id,
-                    isSuspended: p.is_suspended || false,
-                    isApproved: p.is_approved !== false,
-                    assignedClasses: Array.isArray(p.assigned_classes) ? p.assigned_classes : (p.assigned_classes ? JSON.parse(p.assigned_classes) : []),
-                    createdAt: p.created_at,
-                    isActingDirector: (Array.isArray(p.roles) ? p.roles : (p.roles ? JSON.parse(p.roles) : []))?.includes('ACTING_DIRECTOR') || false,
+                    ...p,
+                    isApproved: p.isApproved !== false,
+                    isActingDirector: (p.roles || [])?.includes('ACTING_DIRECTOR') || false,
                     isFirstLogin: false
                 }));
                 setAllTeachers(mappedTeachers);
@@ -124,19 +114,9 @@ const App: React.FC = () => {
                     const { data } = await client.from('profiles').select('*');
                     if (data) {
                         const updatedList: Teacher[] = data.map((p: any) => ({
-                            id: p.id,
-                            schoolId: p.school_id,
-                            name: p.name,
-                            password: p.password,
-                            position: p.position,
-                            roles: Array.isArray(p.roles) ? p.roles : (p.roles ? JSON.parse(p.roles) : []),
-                            signatureBase64: p.signature_base_64,
-                            telegramChatId: p.telegram_chat_id,
-                            isSuspended: p.is_suspended || false,
-                            isApproved: p.is_approved !== false,
-                            assignedClasses: Array.isArray(p.assigned_classes) ? p.assigned_classes : (p.assigned_classes ? JSON.parse(p.assigned_classes) : []),
-                            createdAt: p.created_at,
-                            isActingDirector: (Array.isArray(p.roles) ? p.roles : (p.roles ? JSON.parse(p.roles) : []))?.includes('ACTING_DIRECTOR') || false
+                            ...p,
+                            isApproved: p.isApproved !== false,
+                            isActingDirector: (p.roles || [])?.includes('ACTING_DIRECTOR') || false
                         } as any));
                         setAllTeachers(updatedList);
 
@@ -287,6 +267,7 @@ const App: React.FC = () => {
             telegram_chat_id: t.telegramChatId,
             is_suspended: t.isSuspended || false, 
             is_approved: t.isApproved !== false,
+            signature_base_64: t.signatureBase64,
             assigned_classes: t.assignedClasses || []
         }).eq('id', t.id);
         

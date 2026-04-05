@@ -142,12 +142,11 @@ const jsonFieldsMap: any = {
 const uuidTables = ['class_rooms', 'students', 'student_savings', 'academic_years', 'student_attendance', 'student_health_records', 'director_events', 'finance_accounts', 'finance_transactions'];
 
 // DATA SYNC (Base64 fallback for strict firewalls)
-app.all(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge', '/api/v1/sync'], async (req, res) => {
-  console.log(`[Data Sync API] Incoming request from ${req.ip} via ${req.method}`);
+app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge', '/api/v1/sync'], async (req, res) => {
+  console.log(`[Data Sync API] Incoming request from ${req.ip}`);
   try {
-    // Support multiple parameter names and both GET/POST to bypass specific WAF filters
-    const payload = req.body.d || req.body.p || req.body.z || req.body.data || req.body.payload || 
-                    req.query.d || req.query.p || req.query.z || req.query.data || req.query.payload;
+    // Support multiple parameter names to bypass specific WAF filters
+    const payload = req.body.d || req.body.p || req.body.z || req.body.data || req.body.payload;
     
     if (!payload) {
       console.error('[Data Sync API] Missing payload');
@@ -997,19 +996,16 @@ async function startServer() {
       // 3. Ensure profiles exists
       await connection.query(`
         CREATE TABLE IF NOT EXISTS profiles (
-          id VARCHAR(100) PRIMARY KEY,
-          school_id VARCHAR(50),
-          name VARCHAR(255) NOT NULL,
-          password VARCHAR(255) DEFAULT '123456',
-          position VARCHAR(255),
-          roles LONGTEXT,
-          signature_base_64 LONGTEXT,
-          telegram_chat_id VARCHAR(100),
-          is_suspended BOOLEAN DEFAULT FALSE,
-          is_approved BOOLEAN DEFAULT FALSE,
-          assigned_classes LONGTEXT,
+          id VARCHAR(36) PRIMARY KEY,
+          school_id VARCHAR(36),
+          email VARCHAR(255),
+          full_name VARCHAR(255),
+          role VARCHAR(50),
+          roles TEXT,
+          position VARCHAR(100),
+          assigned_classes TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB
+        )
       `);
 
       console.log('[STARTUP] Schema check completed');

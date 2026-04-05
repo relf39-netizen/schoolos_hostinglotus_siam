@@ -41,7 +41,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ schools, teachers, onLogin, o
             const client = supabase;
             if (isSupabaseConfigured && client) {
                 const { data: superAdmin, error: superError } = await client
-                    .from('admin_accounts')
+                    .from('super_admins')
                     .select('*')
                     .eq('username', loginUsername)
                     .eq('password', loginPassword)

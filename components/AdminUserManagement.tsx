@@ -1122,7 +1122,7 @@ function setTelegramWebhook() {
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap gap-1.5">
-                                        {Array.isArray(t.roles) && t.roles.map(role => (
+                                        {t.roles.map(role => (
                                             <span key={role} className="px-2 py-0.5 bg-white border border-slate-100 text-slate-500 rounded-md text-[9px] font-bold uppercase tracking-tighter">
                                                 {AVAILABLE_ROLES.find(r => r.id === role)?.label.split(' ')[0] || role}
                                             </span>

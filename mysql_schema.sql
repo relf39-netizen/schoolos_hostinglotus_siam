@@ -5,7 +5,7 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- 0. ตารางผู้ดูแลระบบสูงสุด (Super Admin)
-CREATE TABLE IF NOT EXISTS admin_accounts (
+CREATE TABLE IF NOT EXISTS super_admins (
   id INT AUTO_INCREMENT PRIMARY KEY,
   username VARCHAR(255) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS admin_accounts (
 ) ENGINE=InnoDB;
 
 -- เพิ่มข้อมูล Super Admin เริ่มต้น
-INSERT INTO admin_accounts (username, password, name) 
+INSERT INTO super_admins (username, password, name) 
 VALUES ('peyarm', 'Siam@2520', 'Super Admin')
 ON DUPLICATE KEY UPDATE password = 'Siam@2520';
 

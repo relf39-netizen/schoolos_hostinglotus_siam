@@ -56,7 +56,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         const fetchSuperAdmin = async () => {
             const client = supabase;
             if (isSupabaseConfigured && client) {
-                const { data } = await client.from('admin_accounts').select('*').limit(1).maybeSingle();
+                const { data } = await client.from('super_admins').select('*').limit(1).maybeSingle();
                 if (data) {
                     setSuperAdminData({ username: data.username, password: data.password });
                     setOldUsername(data.username);
@@ -102,9 +102,9 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         setIsSavingAccount(true);
         try {
             if (superAdminData.username !== oldUsername) {
-                await client.from('admin_accounts').delete().eq('username', oldUsername);
+                await client.from('super_admins').delete().eq('username', oldUsername);
             }
-            const { error } = await client.from('admin_accounts').upsert({
+            const { error } = await client.from('super_admins').upsert({
                 username: superAdminData.username,
                 password: superAdminData.password
             });
