@@ -71,12 +71,20 @@ const App: React.FC = () => {
             if (profilesError) console.error("App: Profiles Fetch Error:", profilesError);
             if (profilesData) {
                 console.log(`App: Fetched ${profilesData.length} profiles`);
-                const mappedTeachers: Teacher[] = profilesData.map((p: any) => ({
-                    ...p,
-                    isApproved: p.isApproved !== false,
-                    isActingDirector: (p.roles || [])?.includes('ACTING_DIRECTOR') || false,
-                    isFirstLogin: false
-                }));
+                const mappedTeachers: Teacher[] = profilesData.map((p: any) => {
+                    let roles = p.roles;
+                    if (typeof roles === 'string') {
+                        try { roles = JSON.parse(roles); } catch(e) { roles = []; }
+                    }
+                    if (!Array.isArray(roles)) roles = [];
+                    return {
+                        ...p,
+                        roles,
+                        isApproved: p.isApproved !== false,
+                        isActingDirector: roles.includes('ACTING_DIRECTOR') || false,
+                        isFirstLogin: false
+                    };
+                });
                 setAllTeachers(mappedTeachers);
                 
                 const storedSession = localStorage.getItem(SESSION_KEY);
@@ -113,11 +121,19 @@ const App: React.FC = () => {
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async (payload: any) => {
                     const { data } = await client.from('profiles').select('*');
                     if (data) {
-                        const updatedList: Teacher[] = data.map((p: any) => ({
-                            ...p,
-                            isApproved: p.isApproved !== false,
-                            isActingDirector: (p.roles || [])?.includes('ACTING_DIRECTOR') || false
-                        } as any));
+                        const updatedList: Teacher[] = data.map((p: any) => {
+                            let roles = p.roles;
+                            if (typeof roles === 'string') {
+                                try { roles = JSON.parse(roles); } catch(e) { roles = []; }
+                            }
+                            if (!Array.isArray(roles)) roles = [];
+                            return {
+                                ...p,
+                                roles,
+                                isApproved: p.isApproved !== false,
+                                isActingDirector: roles.includes('ACTING_DIRECTOR') || false
+                            };
+                        });
                         setAllTeachers(updatedList);
 
                         const sessionStr = localStorage.getItem(SESSION_KEY);
@@ -553,7 +569,6 @@ const App: React.FC = () => {
                                                 password: t.password,
                                                 position: t.position,
                                                 roles: finalRoles,
-                                                signature_base_64: t.signatureBase64,
                                                 telegram_chat_id: t.telegramChatId,
                                                 is_suspended: t.isSuspended || false,
                                                 is_approved: t.isApproved !== false,

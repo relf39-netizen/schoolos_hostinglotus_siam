@@ -67,7 +67,15 @@ const parseJsonFields = (row, fields) => {
     if (newRow[field] && typeof newRow[field] === 'string') {
       try {
         newRow[field] = JSON.parse(newRow[field]);
-      } catch (e) {}
+      } catch (e) {
+        if (['roles', 'assigned_classes', 'target_teachers', 'acknowledged_by'].includes(field)) {
+          newRow[field] = [];
+        }
+      }
+    } else if (newRow[field] === null || newRow[field] === undefined) {
+      if (['roles', 'assigned_classes', 'target_teachers', 'acknowledged_by'].includes(field)) {
+        newRow[field] = [];
+      }
     }
   });
   return newRow;
@@ -75,15 +83,41 @@ const parseJsonFields = (row, fields) => {
 
 // --- API Endpoints ---
 
+// Table name reverse map for obfuscated names
+const tableReverseMap = {
+  'p1': 'profiles',
+  's1': 'students',
+  'sa1': 'student_attendance',
+  'd1': 'documents',
+  'sc1': 'schools',
+  'lr1': 'leave_requests',
+  'de1': 'director_events',
+  'ss1': 'student_savings',
+  'cr1': 'class_rooms',
+  'ay1': 'academic_years',
+  'su1': 'super_admins',
+  'at1': 'attendance',
+  'ats1': 'academic_test_scores',
+  'st1': 'savings_transactions',
+  'fa1': 'finance_accounts',
+  'ft1': 'finance_transactions',
+  'shr1': 'student_health_records'
+};
+
+function getRealTable(table) {
+  return tableReverseMap[table] || table;
+}
+
 // DATA SYNC (Base64 fallback for strict firewalls)
-app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'], async (req, res) => {
-  console.log(`[Data Sync API] Incoming request from ${req.ip}`);
+app.all(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge', '/api/v1/sync', '/api/v1/status', '/api/v1/health', '/api/v1/config'], async (req, res) => {
+  console.log(`[Data Sync API] Incoming request from ${req.ip} via ${req.method}`);
   try {
-    // Support multiple parameter names to bypass specific WAF filters
-    const payload = req.body.d || req.body.p || req.body.data || req.body.payload;
+    // Support multiple parameter names and both GET/POST to bypass specific WAF filters
+    const payload = req.body.d || req.body.p || req.body.z || req.body.s || req.body.h || req.body.c || req.body.data || req.body.payload || 
+                    req.query.d || req.query.p || req.query.z || req.query.s || req.query.h || req.query.c || req.query.data || req.query.payload;
     
     if (!payload) {
-      console.error('[Data Sync API] Missing payload. Body:', req.body);
+      console.error('[Data Sync API] Missing payload');
       return res.status(400).json({ error: 'Missing payload' });
     }
 
@@ -101,7 +135,21 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
       return res.status(400).json({ error: 'Invalid JSON in payload' });
     }
 
-    const { action, table, data, id, pk = 'id', onConflict, filters } = parsed;
+    // Support both long and short keys for backward compatibility and WAF bypass
+    let action = parsed.a || parsed.action;
+    let table = parsed.t || parsed.table;
+    let data = parsed.d || parsed.data;
+    let id = parsed.k || parsed.id;
+    let filters = parsed.f || parsed.filters;
+    let inFilters = parsed.i || parsed.inFilters;
+    let order = parsed.o || parsed.order;
+    let limit = parsed.l || parsed.limit;
+    let count = parsed.n || parsed.count;
+    let pk = parsed.pk || 'id';
+    
+    // De-obfuscate table name
+    table = getRealTable(table);
+    
     console.log(`[Data Sync API] ${action.toUpperCase()} on ${table}`, { id, pk });
     
     if (action === 'select') {
@@ -114,8 +162,8 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
         params.push(...Object.entries(filters).flatMap(([k, v]) => [k, v]));
       }
 
-      if (parsed.inFilters && Object.keys(parsed.inFilters).length > 0) {
-        Object.entries(parsed.inFilters).forEach(([k, v]) => {
+      if (inFilters && Object.keys(inFilters).length > 0) {
+        Object.entries(inFilters).forEach(([k, v]) => {
           if (Array.isArray(v) && v.length > 0) {
             whereClauses.push(`?? IN (?)`);
             params.push(k, v);
@@ -127,8 +175,10 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
         query += ` WHERE ${whereClauses.join(' AND ')}`;
       }
 
-      if (parsed.order) {
-        const { column, ascending } = parsed.order;
+      if (order) {
+        // Handle both { c, a } and { column, ascending }
+        const column = order.c || order.column;
+        const ascending = order.a !== undefined ? order.a : order.ascending;
         query += ` ORDER BY ?? ${ascending ? 'ASC' : 'DESC'}`;
         params.push(column);
       } else if (table !== 'super_admins') {

@@ -144,17 +144,35 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
     const handleToggleTeacherAdmin = async (teacher: Teacher) => {
         if (!isSupabaseConfigured || !supabase) return;
-        const hasAdmin = teacher.roles.includes('SYSTEM_ADMIN');
+        
+        // Ensure roles is an array
+        const currentRoles = Array.isArray(teacher.roles) ? teacher.roles : (typeof teacher.roles === 'string' ? JSON.parse(teacher.roles) : []);
+        
+        const hasAdmin = currentRoles.includes('SYSTEM_ADMIN');
         let newRoles: TeacherRole[] = hasAdmin 
-            ? teacher.roles.filter(r => r !== 'SYSTEM_ADMIN') 
-            : [...teacher.roles, 'SYSTEM_ADMIN'];
+            ? currentRoles.filter(r => r !== 'SYSTEM_ADMIN') 
+            : [...currentRoles, 'SYSTEM_ADMIN'];
         
         if (!confirm(`ยืนยันการ${hasAdmin ? 'ถอนสิทธิ์' : 'แต่งตั้ง'}แอดมิน: ${teacher.name}?`)) return;
 
         setIsUpdatingTeacher(teacher.id);
-        const { error } = await supabase.from('profiles').update({ roles: newRoles }).eq('id', teacher.id);
-        if (!error) await onUpdateTeacher({ ...teacher, roles: newRoles });
-        setIsUpdatingTeacher(null);
+        try {
+            // Send as JSON string if the backend expects it, or array if Supabase handles it
+            const { error } = await supabase.from('profiles').update({ roles: newRoles }).eq('id', teacher.id);
+            
+            if (error) {
+                console.error("Error updating roles:", error);
+                alert("เกิดข้อผิดพลาดในการอัปเดตสิทธิ์: " + error.message);
+            } else {
+                await onUpdateTeacher({ ...teacher, roles: newRoles });
+                alert("อัปเดตสิทธิ์สำเร็จ");
+            }
+        } catch (err: any) {
+            console.error("Exception updating roles:", err);
+            alert("ขัดข้อง: " + err.message);
+        } finally {
+            setIsUpdatingTeacher(null);
+        }
     };
 
     const handleToggleSchoolSuspension = async (school: School) => {
