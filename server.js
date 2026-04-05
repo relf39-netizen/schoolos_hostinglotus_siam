@@ -67,7 +67,15 @@ const parseJsonFields = (row, fields) => {
     if (newRow[field] && typeof newRow[field] === 'string') {
       try {
         newRow[field] = JSON.parse(newRow[field]);
-      } catch (e) {}
+      } catch (e) {
+        if (['roles', 'assigned_classes', 'target_teachers', 'acknowledged_by'].includes(field)) {
+          newRow[field] = [];
+        }
+      }
+    } else if (newRow[field] === null || newRow[field] === undefined) {
+      if (['roles', 'assigned_classes', 'target_teachers', 'acknowledged_by'].includes(field)) {
+        newRow[field] = [];
+      }
     }
   });
   return newRow;

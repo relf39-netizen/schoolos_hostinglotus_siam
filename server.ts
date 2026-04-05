@@ -73,7 +73,14 @@ const parseJsonFields = (row: any, fields: string[]) => {
       try {
         newRow[field] = JSON.parse(newRow[field]);
       } catch (e) {
-        // Keep as is if not valid JSON
+        // Ensure critical fields are at least empty arrays if parsing fails
+        if (['roles', 'assigned_classes', 'target_teachers', 'acknowledged_by'].includes(field)) {
+          newRow[field] = [];
+        }
+      }
+    } else if (newRow[field] === null || newRow[field] === undefined) {
+      if (['roles', 'assigned_classes', 'target_teachers', 'acknowledged_by'].includes(field)) {
+        newRow[field] = [];
       }
     }
   });
