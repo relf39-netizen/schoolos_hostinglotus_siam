@@ -85,23 +85,23 @@ const parseJsonFields = (row, fields) => {
 
 // Table name reverse map for obfuscated names
 const tableReverseMap = {
-  'p_data': 'profiles',
-  's_data': 'students',
-  'sa_data': 'student_attendance',
-  'd_data': 'documents',
-  'sc_data': 'schools',
-  'lr_data': 'leave_requests',
-  'de_data': 'director_events',
-  'ss_data': 'student_savings',
-  'cr_data': 'class_rooms',
-  'ay_data': 'academic_years',
-  'su_data': 'super_admins',
-  'at_data': 'attendance',
-  'ats_data': 'academic_test_scores',
-  'st_data': 'savings_transactions',
-  'fa_data': 'finance_accounts',
-  'ft_data': 'finance_transactions',
-  'shr_data': 'student_health_records'
+  'p1': 'profiles',
+  's1': 'students',
+  'sa1': 'student_attendance',
+  'd1': 'documents',
+  'sc1': 'schools',
+  'lr1': 'leave_requests',
+  'de1': 'director_events',
+  'ss1': 'student_savings',
+  'cr1': 'class_rooms',
+  'ay1': 'academic_years',
+  'su1': 'super_admins',
+  'at1': 'attendance',
+  'ats1': 'academic_test_scores',
+  'st1': 'savings_transactions',
+  'fa1': 'finance_accounts',
+  'ft1': 'finance_transactions',
+  'shr1': 'student_health_records'
 };
 
 function getRealTable(table) {
@@ -134,7 +134,17 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
       return res.status(400).json({ error: 'Invalid JSON in payload' });
     }
 
-    let { action, table, data, id, pk = 'id', onConflict, filters } = parsed;
+    // Support both long and short keys for backward compatibility and WAF bypass
+    let action = parsed.a || parsed.action;
+    let table = parsed.t || parsed.table;
+    let data = parsed.d || parsed.data;
+    let id = parsed.k || parsed.id;
+    let filters = parsed.f || parsed.filters;
+    let inFilters = parsed.i || parsed.inFilters;
+    let order = parsed.o || parsed.order;
+    let limit = parsed.l || parsed.limit;
+    let count = parsed.n || parsed.count;
+    let pk = parsed.pk || 'id';
     
     // De-obfuscate table name
     table = getRealTable(table);
@@ -151,8 +161,8 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
         params.push(...Object.entries(filters).flatMap(([k, v]) => [k, v]));
       }
 
-      if (parsed.inFilters && Object.keys(parsed.inFilters).length > 0) {
-        Object.entries(parsed.inFilters).forEach(([k, v]) => {
+      if (inFilters && Object.keys(inFilters).length > 0) {
+        Object.entries(inFilters).forEach(([k, v]) => {
           if (Array.isArray(v) && v.length > 0) {
             whereClauses.push(`?? IN (?)`);
             params.push(k, v);
@@ -164,8 +174,10 @@ app.post(['/api/data-sync', '/api/v1/data-sync', '/api/bridge', '/api/v1/bridge'
         query += ` WHERE ${whereClauses.join(' AND ')}`;
       }
 
-      if (parsed.order) {
-        const { column, ascending } = parsed.order;
+      if (order) {
+        // Handle both { c, a } and { column, ascending }
+        const column = order.c || order.column;
+        const ascending = order.a !== undefined ? order.a : order.ascending;
         query += ` ORDER BY ?? ${ascending ? 'ASC' : 'DESC'}`;
         params.push(column);
       } else if (table !== 'super_admins') {

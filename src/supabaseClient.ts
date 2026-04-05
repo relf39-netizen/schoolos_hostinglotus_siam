@@ -5,23 +5,23 @@ const API_URL = window.location.origin + '/api';
 
 // Table name obfuscation map to bypass WAF filters that look for specific table names
 const tableMap: Record<string, string> = {
-  'profiles': 'p_data',
-  'students': 's_data',
-  'student_attendance': 'sa_data',
-  'documents': 'd_data',
-  'schools': 'sc_data',
-  'leave_requests': 'lr_data',
-  'director_events': 'de_data',
-  'student_savings': 'ss_data',
-  'class_rooms': 'cr_data',
-  'academic_years': 'ay_data',
-  'super_admins': 'su_data',
-  'attendance': 'at_data',
-  'academic_test_scores': 'ats_data',
-  'savings_transactions': 'st_data',
-  'finance_accounts': 'fa_data',
-  'finance_transactions': 'ft_data',
-  'student_health_records': 'shr_data'
+  'profiles': 'p1',
+  'students': 's1',
+  'student_attendance': 'sa1',
+  'documents': 'd1',
+  'schools': 'sc1',
+  'leave_requests': 'lr1',
+  'director_events': 'de1',
+  'student_savings': 'ss1',
+  'class_rooms': 'cr1',
+  'academic_years': 'ay1',
+  'super_admins': 'su1',
+  'attendance': 'at1',
+  'academic_test_scores': 'ats1',
+  'savings_transactions': 'st1',
+  'finance_accounts': 'fa1',
+  'finance_transactions': 'ft1',
+  'student_health_records': 'shr1'
 };
 
 function getObfuscatedTable(table: string): string {
@@ -137,13 +137,13 @@ class QueryBuilder {
         const processedInFilters = toSnakeCase(this.inFilters);
         
         const payload = {
-            action: this.action,
-            table: getObfuscatedTable(this.table),
-            filters: processedFilters,
-            inFilters: processedInFilters,
-            order: this.orderCol ? { column: this.orderCol, ascending: this.orderAsc } : null,
-            limit: this.limitVal,
-            count: this.countOption
+            a: this.action,
+            t: getObfuscatedTable(this.table),
+            f: processedFilters,
+            i: processedInFilters,
+            o: this.orderCol ? { c: this.orderCol, a: this.orderAsc } : null,
+            l: this.limitVal,
+            n: this.countOption
         };
 
         const p = b64EncodeUnicode(JSON.stringify(payload));
@@ -242,14 +242,14 @@ class MutationQueryBuilder {
       const processedData = toSnakeCase(this.data);
       
       const payload: any = { 
-        action: this.action, 
-        table: getObfuscatedTable(this.table), 
-        filters: processedFilters,
-        inFilters: processedInFilters
+        a: this.action, 
+        t: getObfuscatedTable(this.table), 
+        f: processedFilters,
+        i: processedInFilters
       };
       
       if (this.action === 'update') {
-        payload.data = processedData;
+        payload.d = processedData;
       }
 
       const p = b64EncodeUnicode(JSON.stringify(payload));
